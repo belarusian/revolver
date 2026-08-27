@@ -178,9 +178,14 @@ def build_launch_plan(proposal: RepairProposal) -> LaunchPlan:
     cycle = _reference_cycle(d)
     outer_wall = _OUTER_WALL_BASE + cycle
     request_timeout = outer_wall + _REQUEST_TIMEOUT_MARGIN
+    # The dry-run command line is launch-safe as a command: it backgrounds the
+    # launch with ``nohup`` (survives the launching shell) and appends (``>>``)
+    # to ``cycles.out`` — never truncates (JUNIOR.md §8). The marker line itself
+    # is carried separately in ``cycles_out_append``.
     command = (
-        f"revolver launch --pipeline {proposal.pipeline_id} "
-        f"--endpoint {d.endpoint_pin} --failure-mode {d.failure_mode}"
+        f"nohup revolver launch --pipeline {proposal.pipeline_id} "
+        f"--endpoint {d.endpoint_pin} --failure-mode {d.failure_mode} "
+        f">> cycles.out 2>&1 &"
     )
     cycles_out_append = f"= LAUNCH {proposal.pipeline_id} {d.failure_mode} =\n"
     rationale = (
