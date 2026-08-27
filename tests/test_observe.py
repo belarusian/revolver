@@ -10,15 +10,22 @@ gap, never assumed done).
 
 from __future__ import annotations
 
+import json
 import re
 from unittest.mock import patch
 
 import revolver.observe as observe_module
+from revolver.diagnosis import Diagnosis
 from revolver.observe import (
     CycleMarker,
     Observation,
+    RecurrenceReport,
+    TrajectoryOutcome,
+    _is_complete_outcome,
     observe,
     parse_cycle_markers,
+    parse_trajectory_outcomes,
+    report,
 )
 
 # ---------------------------------------------------------------------------
@@ -241,5 +248,252 @@ class TestObserve:
             "cycles_done",
             "cycles_in_flight",
             "gaps",
+            "note",
+        }
+
+
+# ---------------------------------------------------------------------------
+# parse_trajectory_outcomes
+# ---------------------------------------------------------------------------
+
+
+class TestParseTrajectoryOutcomes:
+    def test_single_object_complete(self):
+        text = json.dumps({"outcome": "exit:task_complete", "messages": []})
+        outcomes = parse_trajectory_outcomes(text)
+        assert outcomes == [
+            TrajectoryOutcome(
+                cycle=1,
+                outcome="exit:task_complete",
+                raw=text,
+            )
+        ]
+
+    def test_single_object_non_complete(self):
+        text = json.dumps({"outcome": "max_steps_reached", "messages": []})
+        outcomes = parse_trajectory_outcomes(text)
+        assert len(outcomes) == 1
+        assert outcomes[0].outcome == "max_steps_reached"
+        assert _is_complete_outcome(outcomes[0].outcome) is False
+
+    def test_array_preserves_file_order(self):
+        text = json.dumps(
+            [
+                {"outcome": "max_steps_reached"},
+                {"outcome": "error"},
+                {"outcome": "exit:task_complete"},
+            ]
+        )
+        outcomes = parse_trajectory_outcomes(text)
+        assert [o.outcome for o in outcomes] == [
+            "max_steps_reached",
+            "error",
+            "exit:task_complete",
+        ]
+        assert [_is_complete_outcome(o.outcome) for o in outcomes] == [
+            False,
+            False,
+            True,
+        ]
+        # cycle is the 1-based position in file order
+        assert [o.cycle for o in outcomes] == [1, 2, 3]
+
+    def test_array_not_reordered_or_deduped(self):
+        # position is the only order: duplicates and out-of-order values preserved
+        text = json.dumps(
+            [
+                {"outcome": "error"},
+                {"outcome": "error"},
+                {"outcome": "exit:task_complete"},
+            ]
+        )
+        outcomes = parse_trajectory_outcomes(text)
+        assert [o.outcome for o in outcomes] == ["error", "error", "exit:task_complete"]
+        assert len(outcomes) == 3
+
+    def test_malformed_json_returns_empty(self):
+        assert parse_trajectory_outcomes("not json at all") == []
+        assert parse_trajectory_outcomes("{outcome: broken") == []
+
+    def test_empty_string_returns_empty(self):
+        assert parse_trajectory_outcomes("") == []
+
+    def test_non_object_non_array_returns_empty(self):
+        assert parse_trajectory_outcomes("42") == []
+        assert parse_trajectory_outcomes('"a string"') == []
+        assert parse_trajectory_outcomes("null") == []
+
+    def test_object_without_outcome_key(self):
+        text = json.dumps({"messages": []})
+        outcomes = parse_trajectory_outcomes(text)
+        assert len(outcomes) == 1
+        assert outcomes[0].outcome == ""
+        assert _is_complete_outcome(outcomes[0].outcome) is False
+
+    def test_read_trajectory_seam_injects_fake(self):
+        # empty text + seam -> the seam's text is parsed
+        fake = json.dumps({"outcome": "error", "messages": []})
+        outcomes = parse_trajectory_outcomes("", read_trajectory=lambda: fake)
+        assert len(outcomes) == 1
+        assert outcomes[0].outcome == "error"
+
+    def test_read_trajectory_seam_not_called_when_text_present(self):
+        called = []
+
+        def seam():
+            called.append(1)
+            return json.dumps({"outcome": "error"})
+
+        text = json.dumps({"outcome": "exit:task_complete"})
+        outcomes = parse_trajectory_outcomes(text, read_trajectory=seam)
+        assert called == []  # seam not consulted when text is non-empty
+        assert _is_complete_outcome(outcomes[0].outcome) is True
+
+    def test_read_trajectory_seam_empty_returns_empty(self):
+        assert parse_trajectory_outcomes("", read_trajectory=lambda: "") == []
+
+
+# ---------------------------------------------------------------------------
+# report (recurrence verdict)
+# ---------------------------------------------------------------------------
+
+
+class TestReport:
+    def _diag(self, failure_mode, cycles_started, cycles_done=None, cycles_in_flight=None):
+        return Diagnosis(
+            failure_mode=failure_mode,
+            cycles_started=list(cycles_started),
+            cycles_done=list(cycles_done or []),
+            cycles_in_flight=list(cycles_in_flight or []),
+        )
+
+    def test_clean_run_no_recurrence(self):
+        d = self._diag("wall-kill", [1, 2], cycles_done=[1, 2])
+        markers = [CycleMarker(1, "done", "x"), CycleMarker(2, "done", "y")]
+        rep = report(
+            d,
+            markers=markers,
+            read_trajectory=lambda: json.dumps({"outcome": "exit:task_complete"}),
+        )
+        assert rep.recurred is False
+        assert rep.cycles_done == [1, 2]
+        assert rep.gaps == []
+        assert rep.cycles_in_flight == []
+        assert rep.failure_mode == "wall-kill"
+
+    def test_recurred_on_gap(self):
+        d = self._diag("driver-death", [1, 2, 3], cycles_done=[1])
+        markers = [CycleMarker(1, "done", "x")]
+        rep = report(
+            d,
+            markers=markers,
+            read_trajectory=lambda: json.dumps({"outcome": "exit:task_complete"}),
+        )
+        assert rep.recurred is True
+        assert rep.gaps == [2, 3]
+
+    def test_recurred_on_in_flight(self):
+        d = self._diag("stall-kill", [1, 2])
+        markers = [CycleMarker(1, "done", "x"), CycleMarker(2, "started", "y")]
+        rep = report(
+            d,
+            markers=markers,
+            read_trajectory=lambda: json.dumps({"outcome": "exit:task_complete"}),
+        )
+        assert rep.recurred is True
+        assert rep.cycles_in_flight == [2]
+
+    def test_recurred_on_non_complete_outcome(self):
+        d = self._diag("wall-kill", [1], cycles_done=[1])
+        markers = [CycleMarker(1, "done", "x")]
+        rep = report(
+            d,
+            markers=markers,
+            read_trajectory=lambda: json.dumps({"outcome": "max_steps_reached"}),
+        )
+        assert rep.recurred is True
+        assert _is_complete_outcome(rep.outcomes[0].outcome) is False
+
+    def test_recurred_on_error_outcome(self):
+        d = self._diag("driver-death", [1], cycles_done=[1])
+        markers = [CycleMarker(1, "done", "x")]
+        rep = report(
+            d,
+            markers=markers,
+            read_trajectory=lambda: json.dumps({"outcome": "error"}),
+        )
+        assert rep.recurred is True
+
+    def test_no_trajectory_is_clean_when_all_done(self):
+        # no trajectory file -> empty outcomes -> clean if all cycles done
+        d = self._diag("wall-kill", [1], cycles_done=[1])
+        markers = [CycleMarker(1, "done", "x")]
+        rep = report(d, markers=markers, read_trajectory=lambda: "")
+        assert rep.recurred is False
+        assert rep.outcomes == []
+
+    def test_cycles_from_done_plus_in_flight_when_started_empty(self):
+        # cycles_started empty -> falls back to cycles_done + cycles_in_flight
+        d = Diagnosis(
+            failure_mode="wall-kill",
+            cycles_started=[],
+            cycles_done=[1],
+            cycles_in_flight=[2],
+        )
+        markers = [CycleMarker(1, "done", "x"), CycleMarker(2, "started", "y")]
+        rep = report(
+            d,
+            markers=markers,
+            read_trajectory=lambda: json.dumps({"outcome": "exit:task_complete"}),
+        )
+        assert rep.recurred is True
+        assert rep.cycles_in_flight == [2]
+
+    def test_failure_mode_reported_verbatim(self):
+        d = self._diag("some-odd-mode", [1], cycles_done=[1])
+        markers = [CycleMarker(1, "done", "x")]
+        rep = report(
+            d,
+            markers=markers,
+            read_trajectory=lambda: json.dumps({"outcome": "exit:task_complete"}),
+        )
+        assert rep.failure_mode == "some-odd-mode"
+
+    def test_read_cycles_out_seam_used_when_markers_none(self):
+        d = self._diag("driver-death", [1, 2], cycles_done=[1])
+        cycles_out = "========== CYCLE 1 done ==========\n"
+        rep = report(
+            d,
+            read_cycles_out=lambda: cycles_out,
+            read_trajectory=lambda: json.dumps({"outcome": "exit:task_complete"}),
+        )
+        assert rep.recurred is True  # cycle 2 is a gap
+        assert rep.gaps == [2]
+
+    def test_round_trip(self):
+        d = self._diag("driver-death", [1, 2, 3], cycles_done=[1])
+        markers = [CycleMarker(1, "done", "x")]
+        rep = report(
+            d,
+            markers=markers,
+            read_trajectory=lambda: json.dumps({"outcome": "error"}),
+        )
+        assert RecurrenceReport.from_dict(rep.to_dict()) == rep
+
+    def test_to_dict_keys(self):
+        d = self._diag("wall-kill", [1], cycles_done=[1])
+        markers = [CycleMarker(1, "done", "x")]
+        rep = report(
+            d,
+            markers=markers,
+            read_trajectory=lambda: json.dumps({"outcome": "exit:task_complete"}),
+        )
+        assert set(rep.to_dict()) == {
+            "failure_mode",
+            "recurred",
+            "cycles_done",
+            "cycles_in_flight",
+            "gaps",
+            "outcomes",
             "note",
         }
