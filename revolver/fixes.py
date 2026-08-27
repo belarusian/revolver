@@ -1,6 +1,9 @@
 """revolver.fixes — concrete per-failure-mode fix builders.
 
-Diff from predecessor: NEW module (no predecessor in this repo).
+Diff from predecessor: each actionable builder now emits TWO NEW files — the
+existing plan file PLUS a NEW ``<mode>_cycles.out`` marker file (the marker is
+the cycles.out append the launch plan would record). The healthy ("none") builder
+still emits an empty repair path.
 Evidence: sentry/cli.py defines the three actionable failure modes — driver-death
 (driver process dead), wall-kill-no-merge (a cycle wall-killed without merging),
 and stall (inner PID hung; kill the inner PID only, NEVER the driver). Each builder
@@ -19,12 +22,18 @@ from collections.abc import Callable
 from revolver.diagnosis import Diagnosis
 from revolver.proposal import PROPOSAL_NAMESPACE, NewFile
 
-# The generated-file path for a given failure mode (always under the proposal
-# namespace so the repair path is additions-only).
-_PATHS = {
+# The generated-file paths for a given failure mode (always under the proposal
+# namespace so the repair path is additions-only). Each mode has a plan file and a
+# cycles.out marker file.
+_PLAN_PATHS = {
     "driver-death": PROPOSAL_NAMESPACE + "driver_death_relaunch.py",
     "wall-kill": PROPOSAL_NAMESPACE + "wall_kill_remerge.py",
     "stall-kill": PROPOSAL_NAMESPACE + "stall_inner_kill.py",
+}
+_MARKER_PATHS = {
+    "driver-death": PROPOSAL_NAMESPACE + "driver-death_cycles.out",
+    "wall-kill": PROPOSAL_NAMESPACE + "wall-kill_cycles.out",
+    "stall-kill": PROPOSAL_NAMESPACE + "stall-kill_cycles.out",
 }
 
 
@@ -45,11 +54,29 @@ def _content(diff: str, evidence: str, body: str) -> str:
     )
 
 
+def _marker_content(diff: str, evidence: str, marker_line: str) -> str:
+    """Assemble a cycles.out marker file's content.
+
+    The marker file carries the same required docstring plus the single marker
+    line that would be appended to ``cycles.out`` on launch.
+    """
+    return (
+        '"""Generated cycles.out marker (additions only; hard rule 7: never mutate).\n'
+        "\n"
+        f"Diff from predecessor: {diff}\n"
+        f"Evidence: {evidence}\n"
+        '"""\n'
+        "\n"
+        f"{marker_line}\n"
+    )
+
+
 def build_driver_death_fix(diagnosis: Diagnosis) -> list[NewFile]:
     """NEW-file-only repair path for a dead driver process.
 
-    Pure, deterministic, stdlib-only. Emits a relaunch-plan file (no process is
-    actually launched here — that is cycles 8-9).
+    Pure, deterministic, stdlib-only. Emits a relaunch-plan file PLUS a
+    ``driver-death_cycles.out`` marker file (no process is actually launched here
+    — that is cycles 8-9).
     """
     cycle = diagnosis.driver_death_cycle
     diff = (
@@ -66,20 +93,32 @@ def build_driver_death_fix(diagnosis: Diagnosis) -> list[NewFile]:
         f"ENDPOINT_PIN = {diagnosis.endpoint_pin!r}\n"
         f"DEAD_CYCLE = {cycle}\n"
     )
+    marker_line = f"= LAUNCH {diagnosis.pipeline_id} driver-death =\n"
+    marker_diff = (
+        f"NEW cycles.out marker for the dead driver (cycle {cycle}); no predecessor "
+        "file existed, so the diff is the entire file."
+    )
     return [
         NewFile(
-            path=_PATHS["driver-death"],
+            path=_PLAN_PATHS["driver-death"],
             content=_content(diff, evidence, body),
             diff_from_predecessor=diff,
             evidence=evidence,
-        )
+        ),
+        NewFile(
+            path=_MARKER_PATHS["driver-death"],
+            content=_marker_content(marker_diff, evidence, marker_line),
+            diff_from_predecessor=marker_diff,
+            evidence=evidence,
+        ),
     ]
 
 
 def build_wall_kill_fix(diagnosis: Diagnosis) -> list[NewFile]:
     """NEW-file-only repair path for a wall-killed cycle that never merged.
 
-    Pure, deterministic, stdlib-only. Emits a remerge-plan file.
+    Pure, deterministic, stdlib-only. Emits a remerge-plan file PLUS a
+    ``wall-kill_cycles.out`` marker file.
     """
     cycle = diagnosis.wall_kill_cycle
     diff = (
@@ -97,13 +136,24 @@ def build_wall_kill_fix(diagnosis: Diagnosis) -> list[NewFile]:
         f"WALL_KILL_CYCLE = {cycle}\n"
         f"WALL_KILL_CYCLES = {diagnosis.cycles_wall_kill!r}\n"
     )
+    marker_line = f"= LAUNCH {diagnosis.pipeline_id} wall-kill =\n"
+    marker_diff = (
+        f"NEW cycles.out marker for the wall-killed cycle {cycle}; no predecessor "
+        "file existed, so the diff is the entire file."
+    )
     return [
         NewFile(
-            path=_PATHS["wall-kill"],
+            path=_PLAN_PATHS["wall-kill"],
             content=_content(diff, evidence, body),
             diff_from_predecessor=diff,
             evidence=evidence,
-        )
+        ),
+        NewFile(
+            path=_MARKER_PATHS["wall-kill"],
+            content=_marker_content(marker_diff, evidence, marker_line),
+            diff_from_predecessor=marker_diff,
+            evidence=evidence,
+        ),
     ]
 
 
@@ -111,7 +161,8 @@ def build_stall_kill_fix(diagnosis: Diagnosis) -> list[NewFile]:
     """NEW-file-only repair path for a stalled inner PID.
 
     Pure, deterministic, stdlib-only. Emits an inner-PID kill-plan file (kill the
-    inner PID only, NEVER the driver — that stays sentry's).
+    inner PID only, NEVER the driver — that stays sentry's) PLUS a
+    ``stall-kill_cycles.out`` marker file.
     """
     diff = (
         "NEW inner-PID kill-plan file for a stalled inner process; no predecessor "
@@ -129,13 +180,24 @@ def build_stall_kill_fix(diagnosis: Diagnosis) -> list[NewFile]:
         f"STALL_REASON = {diagnosis.stall_reason!r}\n"
         f"LIVE_WORK_ROOT = {diagnosis.live_work_root!r}\n"
     )
+    marker_line = f"= LAUNCH {diagnosis.pipeline_id} stall-kill =\n"
+    marker_diff = (
+        "NEW cycles.out marker for a stalled inner process; no predecessor file "
+        "existed, so the diff is the entire file."
+    )
     return [
         NewFile(
-            path=_PATHS["stall-kill"],
+            path=_PLAN_PATHS["stall-kill"],
             content=_content(diff, evidence, body),
             diff_from_predecessor=diff,
             evidence=evidence,
-        )
+        ),
+        NewFile(
+            path=_MARKER_PATHS["stall-kill"],
+            content=_marker_content(marker_diff, evidence, marker_line),
+            diff_from_predecessor=marker_diff,
+            evidence=evidence,
+        ),
     ]
 
 
