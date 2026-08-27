@@ -18,19 +18,35 @@ typo, not a real miss. The rule it motivates: "the observer can only union what
 the launch preserved" and must report honestly when markers are truly absent.
 A cycle with no marker is a gap; the observer never assumes it is done.
 
+Cycle 11 extends the observer with the trajectory half and the recurrence
+verdict. JUNIOR.md §1: the outer reads each cycle's JSON trajectory
+(``{outcome, messages}``); the outcome dialect is ``exit:task_complete`` /
+``max_steps_reached`` / ``error`` (run.py step 2). ``parse_trajectory_outcomes``
+parses that JSON (a single object or an array of objects) into per-cycle
+outcomes in FILE ORDER (never reordered, never deduped). ``report`` composes the
+Cycle 10 marker observation with the trajectory outcomes and the diagnosed
+``failure_mode`` into a recurrence verdict: the diagnosed failure mode has
+recurred when the observed run shows a non-complete trajectory outcome, a gap
+where a done marker was expected, or an in-flight cycle; it is clean when all
+expected cycles are done and every outcome is complete.
+
 READ-ONLY invariants (TICKET-048): no process launch, no process kill, no write.
-The only I/O is through the overridable seams (``read_cycles_out``); the default
-seam does the real file read, but the logic is pure. Pure, deterministic,
-stdlib-only.
+The only I/O is through the overridable seams (``read_cycles_out``,
+``read_trajectory``); the default seams do the real file reads, but the logic is
+pure. Pure, deterministic, stdlib-only.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from revolver.diagnosis import Diagnosis
 
 # ---------------------------------------------------------------------------
 # Marker grammar (mirrors the §8 sentinel; tolerant, position-preserving)
@@ -260,4 +276,332 @@ def observe(
         cycles_in_flight=cycles_in_flight,
         gaps=gaps,
         note=_build_note(len(cycles_list), cycles_done, cycles_in_flight, gaps),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Trajectory outcome dialect (JUNIOR.md §1 / run.py step 2)
+# ---------------------------------------------------------------------------
+
+# The §1 trajectory outcome dialect. A trajectory is the ``{outcome, messages}``
+# object the outer reads after each cycle (run.py step 2: "inspect its 'outcome'
+# (exit:task_complete / max_steps_reached / error)"). ``exit:task_complete`` is the
+# only *complete* outcome; ``max_steps_reached`` and ``error`` (and any other value)
+# are *non-complete* — the inner stopped without finishing the chunk.
+_COMPLETE_OUTCOME = "exit:task_complete"
+
+
+def _is_complete_outcome(outcome: str) -> bool:
+    """True when a trajectory outcome is the complete (task-finished) one.
+
+    Only ``exit:task_complete`` counts as complete. ``max_steps_reached``,
+    ``error``, and any other value are non-complete.
+    """
+    return outcome == _COMPLETE_OUTCOME
+
+
+# ---------------------------------------------------------------------------
+# TrajectoryOutcome
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class TrajectoryOutcome:
+    """One parsed per-cycle trajectory outcome.
+
+    Attributes:
+        cycle: The cycle number the trajectory belongs to. When the trajectory
+            JSON carries no explicit cycle number (the §1 dialect has none), this
+            is the 1-based position of the object in the array (or 1 for a single
+            object) — file order is the only order.
+        outcome: The raw ``outcome`` string (e.g. ``"exit:task_complete"``,
+            ``"max_steps_reached"``, ``"error"``). Completeness is derived, not
+            stored: see :func:`_is_complete_outcome`.
+        raw: The original JSON text the outcome was parsed from (provenance).
+    """
+
+    cycle: int
+    outcome: str
+    raw: str
+
+
+# ---------------------------------------------------------------------------
+# parse_trajectory_outcomes
+# ---------------------------------------------------------------------------
+
+
+def _extract_outcome(obj: Any) -> str:
+    """Pull the ``outcome`` string out of one trajectory object (defensive)."""
+    if isinstance(obj, dict):
+        return str(obj.get("outcome", ""))
+    return ""
+
+
+def parse_trajectory_outcomes(
+    text: str,
+    *,
+    read_trajectory: Callable[[], str] | None = None,
+) -> list[TrajectoryOutcome]:
+    """Parse the outer's per-cycle trajectory JSON into per-cycle outcomes.
+
+    The §1 dialect is a ``{outcome, messages}`` object, or a JSON array of such
+    objects (one per cycle). This parses either shape into a list of
+    :class:`TrajectoryOutcome` in FILE ORDER — the array's order is preserved and
+    never reordered or deduped (position is the only order, JUNIOR.md §1).
+
+    Args:
+        text: The trajectory JSON text to parse. A single ``{outcome, messages}``
+            object, or a JSON array of such objects.
+        read_trajectory: Overridable seam. When ``text`` is empty (``""``) and a
+            ``read_trajectory`` is supplied, the text is taken from the seam
+            instead (the default seam reads the newest trajectory file). This lets
+            tests inject a fake without touching the filesystem.
+
+    Returns:
+        A list of :class:`TrajectoryOutcome` in file order. Malformed JSON, an
+        empty string, or a non-object/non-array payload -> empty list (never
+        raises).
+
+    Pure, deterministic, stdlib-only; the only I/O is through ``read_trajectory``.
+    """
+    if not text:
+        if read_trajectory is None:
+            read_trajectory = _default_read_trajectory
+        text = read_trajectory()
+    if not text:
+        return []
+
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return []
+
+    # Normalize to a list of objects, preserving file order.
+    if isinstance(data, list):
+        items = data
+    elif isinstance(data, dict):
+        items = [data]
+    else:
+        return []
+
+    outcomes: list[TrajectoryOutcome] = []
+    for idx, obj in enumerate(items, start=1):
+        outcome = _extract_outcome(obj)
+        outcomes.append(
+            TrajectoryOutcome(
+                cycle=idx,
+                outcome=outcome,
+                raw=text,
+            )
+        )
+    return outcomes
+
+
+# ---------------------------------------------------------------------------
+# Default trajectory seam
+# ---------------------------------------------------------------------------
+
+
+def _default_read_trajectory() -> str:
+    """Default ``read_trajectory`` seam: read the newest trajectory file.
+
+    Looks for the newest ``*.json`` in ``ai/trajectories`` (the canonical
+    artifact dir, JUNIOR.md §7), falling back to ``trajectories`` at the project
+    root. Returns an empty string when no trajectory file exists (the parser then
+    yields an empty list — honestly, never assumed complete).
+    """
+    for candidate in (Path("ai") / "trajectories", Path("trajectories")):
+        if candidate.is_dir():
+            files = sorted(candidate.glob("*.json"))
+            if files:
+                return files[-1].read_text(encoding="utf-8")
+    return ""
+
+
+# ---------------------------------------------------------------------------
+# RecurrenceReport
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class RecurrenceReport:
+    """A read-only recurrence verdict for a diagnosed failure mode.
+
+    Composes the Cycle 10 marker observation (done / in-flight / gaps) with the
+    trajectory outcomes and the diagnosed ``failure_mode`` into a single verdict:
+    did the diagnosed failure mode recur in the observed run?
+
+    Attributes:
+        failure_mode: The diagnosed failure mode under test (from the
+            :class:`~revolver.diagnosis.Diagnosis`), verbatim.
+        recurred: True when the observed run shows the diagnosed failure mode
+            recurring — a non-complete trajectory outcome (``max_steps_reached`` /
+            ``error``), a gap where a done marker was expected, or an in-flight
+            cycle. False when the run is clean (all expected cycles done and every
+            outcome complete).
+        cycles_done: Cycles with a done marker (from the observation).
+        cycles_in_flight: Cycles started but not done (from the observation).
+        gaps: Cycles with no marker at all — reported honestly, never assumed done.
+        outcomes: The parsed per-cycle :class:`TrajectoryOutcome` list (file order).
+        note: A deterministic, human-readable summary of the verdict.
+    """
+
+    failure_mode: str
+    recurred: bool
+    cycles_done: list[int] = field(default_factory=list)
+    cycles_in_flight: list[int] = field(default_factory=list)
+    gaps: list[int] = field(default_factory=list)
+    outcomes: list[TrajectoryOutcome] = field(default_factory=list)
+    note: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a plain dict (lossless)."""
+        return {
+            "failure_mode": self.failure_mode,
+            "recurred": self.recurred,
+            "cycles_done": list(self.cycles_done),
+            "cycles_in_flight": list(self.cycles_in_flight),
+            "gaps": list(self.gaps),
+            "outcomes": [
+                {
+                    "cycle": o.cycle,
+                    "outcome": o.outcome,
+                    "raw": o.raw,
+                }
+                for o in self.outcomes
+            ],
+            "note": self.note,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> RecurrenceReport:
+        """Reconstruct a RecurrenceReport from a dict produced by :meth:`to_dict`."""
+        outcomes = [
+            TrajectoryOutcome(
+                cycle=o["cycle"],
+                outcome=o["outcome"],
+                raw=o["raw"],
+            )
+            for o in data.get("outcomes", [])
+        ]
+        return cls(
+            failure_mode=data["failure_mode"],
+            recurred=data["recurred"],
+            cycles_done=list(data["cycles_done"]),
+            cycles_in_flight=list(data["cycles_in_flight"]),
+            gaps=list(data["gaps"]),
+            outcomes=outcomes,
+            note=data["note"],
+        )
+
+
+# ---------------------------------------------------------------------------
+# report
+# ---------------------------------------------------------------------------
+
+
+def _build_recurrence_note(
+    failure_mode: str,
+    recurred: bool,
+    cycles_done: list[int],
+    cycles_in_flight: list[int],
+    gaps: list[int],
+    outcomes: list[TrajectoryOutcome],
+) -> str:
+    """Build a deterministic, human-readable summary of a recurrence verdict."""
+    parts = [f"failure_mode={failure_mode}"]
+    parts.append(f"{len(cycles_done)} done")
+    if cycles_in_flight:
+        parts.append(f"{len(cycles_in_flight)} in flight")
+    if gaps:
+        parts.append(f"{len(gaps)} gaps (no marker; not assumed done)")
+    non_complete = [o for o in outcomes if not _is_complete_outcome(o.outcome)]
+    if non_complete:
+        parts.append(f"{len(non_complete)} non-complete outcome(s)")
+    parts.append("RECURRED" if recurred else "clean")
+    return "; ".join(parts)
+
+
+def report(
+    diagnosis: Diagnosis,
+    *,
+    markers: Sequence[CycleMarker] | None = None,
+    read_cycles_out: Callable[[], str] | None = None,
+    read_trajectory: Callable[[], str] | None = None,
+) -> RecurrenceReport:
+    """Compose the marker observation + trajectory outcomes into a recurrence verdict.
+
+    Takes a :class:`~revolver.diagnosis.Diagnosis` (which carries the diagnosed
+    ``failure_mode`` and the ordered cycle numbers the driver is responsible for)
+    and reports whether that failure mode recurred in the observed run.
+
+    The verdict is ``recurred=True`` when the observed run shows the diagnosed
+    failure mode recurring, i.e. ANY of:
+
+    * a non-complete trajectory outcome (``max_steps_reached`` / ``error`` / any
+      value other than ``exit:task_complete``);
+    * a gap — a cycle with no marker at all where a done marker was expected
+      (reported honestly, never assumed done, the §7 union rule);
+    * an in-flight cycle — started but not done.
+
+    It is ``recurred=False`` (clean) only when every expected cycle is done AND
+    every trajectory outcome is complete.
+
+    Args:
+        diagnosis: The diagnosed record. Its ``failure_mode`` is reported
+            verbatim; the ordered set of cycles the driver is responsible for is
+            the union of its ``cycles_started`` / ``cycles_done`` /
+            ``cycles_in_flight`` (first-seen order).
+        markers: Overridable seam — a list of :class:`CycleMarker`. When ``None``
+            (the default), the markers are parsed from the text returned by
+            ``read_cycles_out``.
+        read_cycles_out: Overridable seam returning the ``cycles.out`` text.
+            Defaults to reading the real file. Only consulted when ``markers`` is
+            ``None``.
+        read_trajectory: Overridable seam returning the trajectory JSON text.
+            Defaults to reading the newest trajectory file. Inject a fake so tests
+            never touch the filesystem.
+
+    Returns:
+        A :class:`RecurrenceReport`.
+
+    READ-ONLY: the only I/O is through the seams; no process launch, no kill, no
+    write. Pure, deterministic, stdlib-only.
+    """
+    # The ordered cycles the driver is responsible for: the union of the
+    # diagnosis's cycle sets, in first-seen order (started, then done, then
+    # in-flight). A cycle is *expected* if it appears in any of them.
+    cycles: list[int] = []
+    for c in (
+        list(diagnosis.cycles_started)
+        + list(diagnosis.cycles_done)
+        + list(diagnosis.cycles_in_flight)
+    ):
+        if c not in cycles:
+            cycles.append(c)
+
+    obs = observe(cycles, markers=markers, read_cycles_out=read_cycles_out)
+
+    if read_trajectory is None:
+        read_trajectory = _default_read_trajectory
+    outcomes = parse_trajectory_outcomes("", read_trajectory=read_trajectory)
+
+    non_complete = [o for o in outcomes if not _is_complete_outcome(o.outcome)]
+    recurred = bool(obs.gaps) or bool(obs.cycles_in_flight) or bool(non_complete)
+
+    return RecurrenceReport(
+        failure_mode=diagnosis.failure_mode,
+        recurred=recurred,
+        cycles_done=obs.cycles_done,
+        cycles_in_flight=obs.cycles_in_flight,
+        gaps=obs.gaps,
+        outcomes=outcomes,
+        note=_build_recurrence_note(
+            diagnosis.failure_mode,
+            recurred,
+            obs.cycles_done,
+            obs.cycles_in_flight,
+            obs.gaps,
+            outcomes,
+        ),
     )
