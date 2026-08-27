@@ -9,6 +9,9 @@ description = "Deterministic, stdlib-only repair-path generator for sentry diagn
 requires-python = ">=3.10"
 dependencies = []
 
+[project.optional-dependencies]
+sentry = ["sentry @ git+https://github.com/belarusian/sentry.git@9713735c0b588e271f277a4b2b9f377ffbe2681c"]
+
 [tool.setuptools]
 packages = ["revolver"]
 
