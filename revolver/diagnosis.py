@@ -20,7 +20,10 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from revolver.sentry_client import SentryClient
 
 # ---------------------------------------------------------------------------
 # Allowed-value sets (used by validate())
@@ -61,6 +64,7 @@ class Diagnosis:
         verdict: "HEALTHY" or "ACTION NEEDED".
         source: "sentry-report" | "raw-artifacts" — provenance.
         raw: The original text (for debugging).
+        sentry_exit_code: The house exit code returned by sentry (0/1/2), if any.
     """
 
     pipeline_id: str = "revolver"
@@ -82,6 +86,7 @@ class Diagnosis:
     verdict: str = "HEALTHY"
     source: str = "sentry-report"
     raw: str = ""
+    sentry_exit_code: int | None = None
 
     # -- derived properties -------------------------------------------------
 
@@ -97,6 +102,8 @@ class Diagnosis:
     @property
     def exit_code(self) -> int:
         """House exit-code convention: 0=healthy, 1=action needed, 2=usage error."""
+        if self.sentry_exit_code is not None:
+            return self.sentry_exit_code
         return 1 if self.action_needed else 0
 
     # -- round-trip ---------------------------------------------------------
@@ -123,6 +130,7 @@ class Diagnosis:
             "verdict": self.verdict,
             "source": self.source,
             "raw": self.raw,
+            "sentry_exit_code": self.sentry_exit_code,
         }
 
     @classmethod
@@ -302,6 +310,7 @@ def diagnose(
     *,
     read_file: Callable[[Path], str] | None = None,
     sentry_available: bool | None = None,
+    client: SentryClient | None = None,
 ) -> Diagnosis:
     """Diagnose a project directory.
 
@@ -312,6 +321,8 @@ def diagnose(
         project_dir: Path to the project directory (containing cycles.out, ai/).
         read_file: Overridable I/O seam (defaults to ``Path.read_text``).
         sentry_available: Override for sentry importability (for testing).
+        client: Optional :class:`SentryClient` for the sentry path (defaults to a
+            fresh client; injectable so tests never shell out).
 
     Returns:
         A validated ``Diagnosis`` dataclass.
@@ -328,9 +339,19 @@ def diagnose(
         except ImportError:
             sentry_available = False
 
-    # When sentry is importable we would invoke `sentry check` and parse its
-    # stdout via parse_sentry_report. That wiring lives in the CLI layer (a later
-    # cycle); here we degrade to raw-artifact parsing and say so via `source`.
+    note = ""
+    if sentry_available:
+        try:
+            from revolver.sentry_client import diagnose_via_sentry
+
+            return diagnose_via_sentry(project_dir, client=client, read_file=read_file)
+        except ImportError:
+            note = "sentry unavailable (not importable); fell back to raw artifacts"
+        except (OSError, ValueError, RuntimeError) as exc:
+            note = f"sentry runner failed ({exc.__class__.__name__}); fell back to raw artifacts"
+    else:
+        note = "sentry unavailable (not importable); fell back to raw artifacts"
+
     cycles_out_path = project_dir / "cycles.out"
     ai_dir = project_dir / "ai"
 
@@ -354,8 +375,10 @@ def diagnose(
             except (json.JSONDecodeError, OSError):
                 pass
 
-    return parse_raw_artifacts(
+    d = parse_raw_artifacts(
         cycles_out_text=cycles_out_text,
         gate_log_text=gate_log_text,
         trajectory_outcome=trajectory_outcome,
     )
+    d.evidence = (d.evidence + "; " if d.evidence else "") + note
+    return d
