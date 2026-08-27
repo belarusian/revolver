@@ -1,36 +1,32 @@
-# TICKET-030: No launch-plan command-shape validation surface in revolver/validation.py
+# TICKET-030: LaunchPlanReport dataclass + check_launch_plan() command-shape validator
 
 ## Title
-Cycle-7 target `check_launch_plan(plan, *, endpoint_pin=None) -> LaunchPlanReport`
-and `validate_manifest_launch(manifest, *, endpoint_pin=None)` do not exist.
+`revolver/validation.py` has no launch-plan validator. Add `LaunchPlanReport(ok, errors)`
+and `check_launch_plan(plan, *, endpoint_pin=None) -> LaunchPlanReport` that validates a
+`LaunchPlan` **as a command** (command-shape invariants the structural
+`LaunchPlan.validate()` does not cover).
 
 ## Evidence
-- `revolver/validation.py` defines only `SyntaxReport` (line 33), `ImportReport`
-  (line 50), `ValidationResult` (line 66), `check_syntax` (line 87),
-  `check_imports` (line 136), and `validate_manifest_artifacts` (line 166).
-  `grep -rn "check_launch_plan\|validate_manifest_launch\|LaunchPlanReport"
-  revolver/ tests/` returns nothing.
-- The module docstring (lines 1-13) scopes the module to *NEW-file content*
-  validation (syntax + imports) and says nothing about validating a `LaunchPlan`
-  *as a command*.
-- `revolver/manifest.py::ProposalManifest.validate()` (lines ~120-135) calls
-  `proposal.validate()` and `launch_plan.validate()` but never inspects the
-  launch plan's *command shape*.
-
-## Impact
-The cycle-7 synthesis deliverable (validate a `LaunchPlan` as a command) has no
-entry point. A `LaunchPlan` whose command is malformed (no `nohup`, a truncate
-marker, a drifted endpoint pin) passes the manifest choke point and is only
-caught — if at all — at deploy (cycles 8-9).
+- `revolver/launch_plan.py` defines `LaunchPlan` (pipeline_id, command,
+  cycles_out_append, endpoint_pin, request_timeout, outer_wall,
+  one_pipeline_per_endpoint, rationale, version) and a structural `validate()`.
+- `revolver/validation.py` (Cycle 6) validates NEW-file *content* (syntax/imports) but
+  says nothing about the launch plan.
+- JUNIOR.md §8: continuation launches must `nohup ... >> cycles.out 2>&1 &` (append,
+  never truncate); §7 scar: a `>` on an existing filename wiped prior markers.
 
 ## Suggestion
-Add to `revolver/validation.py`:
-- `@dataclass LaunchPlanReport` (fields: `ok: bool`, `no_op: bool`,
-  `errors: list[str]`, and per-check booleans `nohup_ok`, `append_ok`,
-  `endpoint_ok`, `budget_ok`, `one_pipeline_ok`).
-- `check_launch_plan(plan: LaunchPlan, *, endpoint_pin: str | None = None)
-  -> LaunchPlanReport` — pure, dry-run, stdlib-only; runs checks (a)-(e) below.
-- `validate_manifest_launch(manifest: ProposalManifest, *, endpoint_pin: str |
-  None = None) -> LaunchPlanReport` — delegates to `check_launch_plan` on
-  `manifest.launch_plan`.
-No I/O, no process launch.
+`LaunchPlanReport` dataclass: `ok: bool`, `errors: list[str]` (empty when ok; on a no-op
+this holds a NOTE, not a failure). `check_launch_plan` is pure, dry-run, stdlib-only, no
+I/O, no process launch. It must NOT re-derive budgets/command — it validates the plan
+`build_launch_plan()` already produced. Checks (each failure appends a descriptive
+string; `ok` is True iff no failures):
+1. no-op short-circuit: empty command + empty marker + zero budgets -> `ok=True` with a
+   "no-op" note, no other checks run.
+2. nohup: a non-no-op `command` must use `nohup` (word check).
+3. append-not-truncate: `cycles_out_append` non-empty, ends with a newline, and is not a
+   truncate/overwrite form (a lone `>` not part of `>>`).
+4. endpoint_pin verbatim: `plan.endpoint_pin == endpoint_pin` when `endpoint_pin` is
+   supplied; otherwise a self-consistency check (always passes).
+5. request_timeout >= outer_wall (equality allowed; compare as ints).
+6. one_pipeline_per_endpoint is True.

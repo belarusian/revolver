@@ -3,17 +3,22 @@ artifacts: check_syntax, check_imports, and validate_manifest_artifacts."""
 
 from __future__ import annotations
 
+import pytest
+
 from revolver.diagnosis import Diagnosis
-from revolver.launch_plan import build_launch_plan
-from revolver.manifest import ProposalManifest
+from revolver.launch_plan import LaunchPlan, build_launch_plan
+from revolver.manifest import ProposalManifest, build_manifest
 from revolver.proposal import PROPOSAL_NAMESPACE, NewFile, RepairProposal
 from revolver.validation import (
     ImportReport,
+    LaunchPlanReport,
     SyntaxReport,
     ValidationResult,
     check_imports,
+    check_launch_plan,
     check_syntax,
     validate_manifest_artifacts,
+    validate_manifest_launch,
 )
 
 
@@ -278,3 +283,149 @@ class TestAllFailureModes:
                 assert res.syntax_ok is True, (mode, res)
                 assert res.imports_ok is True, (mode, res)
                 assert res.errors == [], (mode, res)
+
+
+# ---------------------------------------------------------------------------
+# check_launch_plan — command-shape invariants (nohup, append, pin, budgets)
+# ---------------------------------------------------------------------------
+
+
+def _plan(**overrides) -> LaunchPlan:
+    """A healthy, actionable LaunchPlan; override fields to break it."""
+    base = dict(
+        pipeline_id="revolver",
+        command=(
+            "nohup revolver launch --pipeline revolver --endpoint ep "
+            "--failure-mode driver-death >> cycles.out 2>&1 &"
+        ),
+        cycles_out_append="= LAUNCH revolver driver-death =\n",
+        endpoint_pin="ep",
+        request_timeout=90,
+        outer_wall=60,
+        one_pipeline_per_endpoint=True,
+        rationale="r",
+        version="1.0",
+    )
+    base.update(overrides)
+    return LaunchPlan(**base)
+
+
+def _noop_plan() -> LaunchPlan:
+    return LaunchPlan(
+        pipeline_id="revolver",
+        command="",
+        cycles_out_append="",
+        endpoint_pin="ep",
+        request_timeout=0,
+        outer_wall=0,
+        one_pipeline_per_endpoint=True,
+        rationale="no-op",
+        version="1.0",
+    )
+
+
+class TestCheckLaunchPlan:
+    def test_noop_is_ok_with_note(self):
+        r = check_launch_plan(_noop_plan())
+        assert isinstance(r, LaunchPlanReport)
+        assert r.ok is True
+        assert "no-op" in r.errors[0]
+
+    def test_healthy_actionable_is_ok(self):
+        r = check_launch_plan(_plan())
+        assert r.ok is True
+        assert r.errors == []
+
+    def test_rejects_command_without_nohup(self):
+        r = check_launch_plan(
+            _plan(command="revolver launch --pipeline p --endpoint ep")
+        )
+        assert r.ok is False
+        assert any("nohup" in e for e in r.errors)
+
+    def test_rejects_empty_marker(self):
+        r = check_launch_plan(_plan(cycles_out_append=""))
+        assert r.ok is False
+        assert any("non-empty" in e for e in r.errors)
+
+    def test_rejects_marker_without_newline(self):
+        r = check_launch_plan(_plan(cycles_out_append="= LAUNCH p ="))
+        assert r.ok is False
+        assert any("newline" in e for e in r.errors)
+
+    def test_rejects_truncate_marker(self):
+        r = check_launch_plan(_plan(cycles_out_append="> cycles.out\n"))
+        assert r.ok is False
+        assert any("append" in e and "truncate" in e for e in r.errors)
+
+    def test_rejects_pin_mismatch(self):
+        r = check_launch_plan(_plan(endpoint_pin="ep"), endpoint_pin="other")
+        assert r.ok is False
+        assert any("endpoint_pin" in e for e in r.errors)
+
+    def test_self_consistency_pin_passes(self):
+        # no expected pin supplied -> self-consistency check, always passes
+        r = check_launch_plan(_plan(endpoint_pin="whatever"))
+        assert r.ok is True
+
+    def test_rejects_request_timeout_lt_outer_wall(self):
+        r = check_launch_plan(_plan(request_timeout=30, outer_wall=60))
+        assert r.ok is False
+        assert any("request_timeout" in e for e in r.errors)
+
+    def test_request_timeout_eq_outer_wall_is_ok(self):
+        r = check_launch_plan(_plan(request_timeout=60, outer_wall=60))
+        assert r.ok is True
+
+    def test_rejects_one_pipeline_per_endpoint_false(self):
+        r = check_launch_plan(_plan(one_pipeline_per_endpoint=False))
+        assert r.ok is False
+        assert any("one_pipeline_per_endpoint" in e for e in r.errors)
+
+    def test_deterministic(self):
+        assert check_launch_plan(_plan()) == check_launch_plan(_plan())
+
+
+# ---------------------------------------------------------------------------
+# validate_manifest_launch — every failure_mode ok; broken plan fails
+# ---------------------------------------------------------------------------
+
+
+class TestValidateManifestLaunch:
+    @pytest.mark.parametrize(
+        "failure_mode", ["driver-death", "wall-kill", "stall-kill", "none"]
+    )
+    def test_every_failure_mode_ok(self, failure_mode):
+        m = build_manifest(_diagnosis(failure_mode))
+        r = validate_manifest_launch(m)
+        assert isinstance(r, LaunchPlanReport)
+        assert r.ok is True, (failure_mode, r)
+
+    def test_broken_plan_fails(self):
+        m = build_manifest(_diagnosis("driver-death"))
+        broken = LaunchPlan(
+            pipeline_id=m.pipeline_id,
+            command="revolver launch --pipeline p --endpoint ep",  # no nohup
+            cycles_out_append="> cycles.out\n",  # truncate
+            endpoint_pin="ep",
+            request_timeout=30,
+            outer_wall=60,  # request_timeout < outer_wall
+            one_pipeline_per_endpoint=False,
+            rationale="broken",
+            version="1.0",
+        )
+        m.launch_plan = broken
+        r = validate_manifest_launch(m)
+        assert r.ok is False
+        assert len(r.errors) >= 1
+
+    def test_endpoint_pin_kwarg_forwarded(self):
+        m = build_manifest(_diagnosis("driver-death"))
+        # the real plan carries the diagnosis pin; a different expected pin fails
+        r = validate_manifest_launch(m, endpoint_pin="not-the-pin")
+        assert r.ok is False
+        assert any("endpoint_pin" in e for e in r.errors)
+
+    def test_deterministic(self):
+        m = build_manifest(_diagnosis("wall-kill"))
+        assert validate_manifest_launch(m) == validate_manifest_launch(m)

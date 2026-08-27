@@ -1,32 +1,19 @@
-# TICKET-033: endpoint_pin must be verbatim vs expected (default self-consistency)
+# TICKET-033: tests for check_launch_plan — every acceptance criterion
 
 ## Title
-`check_launch_plan` must verify `plan.endpoint_pin` is verbatim against an
-expected pin, defaulting to self-consistency when no pin is supplied.
+`tests/test_validation.py` must cover `check_launch_plan` for every briefing criterion.
 
 ## Evidence
-- `revolver/launch_plan.py:167` (no-op) and line 194 (actionable) both set
-  `endpoint_pin=d.endpoint_pin` — the plan's pin is copied verbatim from the
-  `Diagnosis` (`revolver/diagnosis.py:73`, `endpoint_pin: str = ""`).
-- The command string embeds the pin at launch_plan.py:182 (`--endpoint
-  {d.endpoint_pin}`), so a pin that drifts between the `Diagnosis`, the plan
-  field, and the command would be undetected.
-- `grep -rn "endpoint_pin" revolver/validation.py` returns nothing — no
-  validator compares the plan's pin to an expected value.
-- Grounding (four repo): `JUNIOR.md` §3 endpoint table — "Never touch an
-  endpoint not in your brief. One pipeline per endpoint at a time."
-
-## Impact
-A `LaunchPlan` whose `endpoint_pin` does not match the pin the pipeline is
-actually pinned to (or that appears in its own command) would launch against the
-wrong endpoint — violating the one-pipeline-per-endpoint allocation and risking a
-litellm timeout or an out-of-brief endpoint.
+- Briefing: accept a healthy no-op plan (no-op note) and an actionable plan (nohup +
+  append marker + verbatim pin + request_timeout >= outer_wall + one pipeline per
+  endpoint); reject a command without nohup; reject a marker that is not an append
+  (empty or truncate form); reject a pin that differs from the expected pin; reject
+  request_timeout < outer_wall; reject one_pipeline_per_endpoint False.
 
 ## Suggestion
-In `check_launch_plan(plan, *, endpoint_pin=None)`:
-- if `endpoint_pin is None`: assert self-consistency — `plan.endpoint_pin` must
-  be non-empty and must appear verbatim in `plan.command` (the `--endpoint`
-  token).
-- if `endpoint_pin` is given: require `plan.endpoint_pin == endpoint_pin`
-  (verbatim, no normalization).
-Record `endpoint_ok` and an error string on mismatch.
+Parametrized tests: (a) no-op plan -> ok + no-op note; (b) healthy actionable plan -> ok;
+(c) command without nohup -> not ok; (d) empty marker -> not ok; (e) truncate marker
+(`> cycles.out`) -> not ok; (f) pin differs from expected -> not ok; (g)
+request_timeout < outer_wall -> not ok; (h) one_pipeline_per_endpoint False -> not ok;
+(i) request_timeout == outer_wall -> ok (equality allowed); (j) self-consistency pin
+(no expected) -> ok. Deterministic.

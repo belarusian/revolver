@@ -10,6 +10,10 @@ files it carries. This module closes that gap: it statically checks each
 to neither the standard library nor the revolver package. It is pure, dry-run,
 stdlib-only, and performs no I/O and no process launch — it operates on the
 in-memory ``content`` strings already held by the manifest.
+It also validates the derived dry-run :class:`~revolver.launch_plan.LaunchPlan`
+as a *command* (nohup, append-not-truncate marker, verbatim endpoint pin,
+request_timeout >= outer_wall, one pipeline per endpoint) — see
+:func:`check_launch_plan` and :func:`validate_manifest_launch`.
 """
 
 from __future__ import annotations
@@ -18,6 +22,8 @@ import ast
 import sys
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
+
+from revolver.launch_plan import LaunchPlan
 
 if TYPE_CHECKING:
     from revolver.manifest import ProposalManifest
@@ -202,3 +208,133 @@ def validate_manifest_artifacts(
             )
         )
     return results
+
+
+# ---------------------------------------------------------------------------
+# Launch-plan validation (command-shape invariants)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class LaunchPlanReport:
+    """Result of validating a :class:`LaunchPlan` as a *command*.
+
+    Attributes:
+        ok: True when the plan is launch-safe as a command (or is a no-op).
+        errors: Human-readable failure strings (empty when ok). On a no-op plan
+            this holds a single NOTE (``"no-op plan"``), not a failure — callers
+            must branch on ``ok``, not on ``len(errors) == 0`` alone.
+    """
+
+    ok: bool
+    errors: list[str] = field(default_factory=list)
+
+
+def _has_truncate_redirect(text: str) -> bool:
+    """True when ``text`` contains a truncate/overwrite redirect.
+
+    A truncate redirect is a lone ``>`` that is not part of an append (``>>``).
+    ``2>&1`` is not a redirect to a file and is ignored.
+    """
+    for i, ch in enumerate(text):
+        if ch == ">" and (i + 1 >= len(text) or text[i + 1] != ">"):
+            return True
+    return False
+
+
+def _is_noop(plan: LaunchPlan) -> bool:
+    """True for a no-op plan: empty command, empty marker, zero budgets."""
+    return (
+        plan.command == ""
+        and plan.cycles_out_append == ""
+        and plan.request_timeout == 0
+        and plan.outer_wall == 0
+    )
+
+
+def check_launch_plan(
+    plan: LaunchPlan,
+    *,
+    endpoint_pin: str | None = None,
+) -> LaunchPlanReport:
+    """Validate a :class:`LaunchPlan` as a *command* (dry-run, no I/O).
+
+    This checks the *command-shape* invariants that the structural
+    :meth:`LaunchPlan.validate` does not cover. It does NOT re-derive the budgets
+    or the command — it validates the plan ``build_launch_plan()`` already
+    produced. Pure, deterministic, stdlib-only; no disk write, no process launch.
+
+    Args:
+        plan: The LaunchPlan to validate.
+        endpoint_pin: An externally expected endpoint pin. When supplied, the
+            plan's ``endpoint_pin`` must equal it verbatim. When ``None``, the
+            check is a self-consistency check (the plan's own pin) and always
+            passes.
+
+    Returns:
+        A :class:`LaunchPlanReport`. A no-op plan (empty command + marker, zero
+        budgets) is reported ``ok`` with a single no-op note and no other checks
+        run.
+    """
+    if _is_noop(plan):
+        return LaunchPlanReport(ok=True, errors=["no-op plan"])
+
+    errors: list[str] = []
+
+    # (a) a non-no-op command must background the launch with nohup.
+    if "nohup" not in plan.command.split():
+        errors.append(
+            "command must use nohup (background, survives the launching shell)"
+        )
+
+    # (b) the marker must be a non-empty append marker, never a truncate form.
+    marker = plan.cycles_out_append
+    if not marker:
+        errors.append("cycles_out_append must be a non-empty append marker")
+    elif not marker.endswith("\n"):
+        errors.append("cycles_out_append must end with a newline")
+    elif _has_truncate_redirect(marker):
+        errors.append(
+            "cycles_out_append must append (>>), never truncate/overwrite (>)"
+        )
+
+    # (c) the endpoint pin must match the expected pin verbatim (self-consistency
+    #     when no expected pin is supplied).
+    if endpoint_pin is not None and plan.endpoint_pin != endpoint_pin:
+        errors.append(
+            f"endpoint_pin {plan.endpoint_pin!r} != expected {endpoint_pin!r}"
+        )
+
+    # (d) the per-request budget must never undercut the outer wall.
+    if plan.request_timeout < plan.outer_wall:
+        errors.append(
+            f"request_timeout ({plan.request_timeout}) must be >= outer_wall "
+            f"({plan.outer_wall})"
+        )
+
+    # (e) one pipeline per endpoint.
+    if not plan.one_pipeline_per_endpoint:
+        errors.append("one_pipeline_per_endpoint must be True")
+
+    return LaunchPlanReport(ok=not errors, errors=errors)
+
+
+def validate_manifest_launch(
+    manifest: ProposalManifest,
+    *,
+    endpoint_pin: str | None = None,
+) -> LaunchPlanReport:
+    """Validate the launch plan carried by a manifest (dry-run, no I/O).
+
+    Runs :func:`check_launch_plan` over ``manifest.launch_plan`` and returns the
+    single report. Pure, deterministic, stdlib-only; no disk write, no process
+    launch.
+
+    Args:
+        manifest: The ProposalManifest whose launch plan to validate.
+        endpoint_pin: Forwarded to :func:`check_launch_plan`.
+
+    Returns:
+        A :class:`LaunchPlanReport` for the manifest's launch plan.
+    """
+    return check_launch_plan(manifest.launch_plan, endpoint_pin=endpoint_pin)
