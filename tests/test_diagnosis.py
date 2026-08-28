@@ -382,3 +382,68 @@ class TestFoundingFixClassFields:
         d = Diagnosis()
         assert d.outer_wall is None
         assert d.inner_seconds is None
+
+
+# ---------------------------------------------------------------------------
+# Cycle 16: additive outer-freshness fix-class fields
+# ---------------------------------------------------------------------------
+
+
+class TestOuterFreshnessFields:
+    def test_new_fields_default(self):
+        d = Diagnosis()
+        assert d.no_new_trajectory_witnessed is False
+        assert d.pass_start_max_seq is None
+
+    def test_derive_outer_freshness(self):
+        from revolver.diagnosis import _derive_failure_mode
+
+        d = Diagnosis(no_new_trajectory_witnessed=True, pass_start_max_seq=26)
+        assert _derive_failure_mode(d) == "outer-freshness"
+
+    def test_outer_freshness_precedence_after_founding_modes(self):
+        # The founding modes (driver-death, inner-wall, client-timeout) win over
+        # outer-freshness; outer-freshness wins over the plain wall-kill.
+        from revolver.diagnosis import _derive_failure_mode
+
+        assert (
+            _derive_failure_mode(
+                Diagnosis(no_new_trajectory_witnessed=True, driver_death_cycle=8)
+            )
+            == "driver-death"
+        )
+        assert (
+            _derive_failure_mode(
+                Diagnosis(no_new_trajectory_witnessed=True, wall_kill_cycle=5)
+            )
+            == "outer-freshness"
+        )
+
+    def test_action_needed_outer_freshness(self):
+        assert Diagnosis(no_new_trajectory_witnessed=True).action_needed is True
+        assert Diagnosis().action_needed is False
+
+    def test_to_dict_from_dict_round_trip(self):
+        d = Diagnosis(no_new_trajectory_witnessed=True, pass_start_max_seq=26)
+        rt = Diagnosis.from_dict(d.to_dict())
+        assert rt.no_new_trajectory_witnessed is True
+        assert rt.pass_start_max_seq == 26
+        assert rt.to_dict() == d.to_dict()
+
+    def test_old_dict_without_new_fields_still_loads(self):
+        old = {
+            "pipeline_id": "x",
+            "failure_mode": "none",
+            "sentry_exit_code": None,
+        }
+        d = Diagnosis.from_dict(old)
+        assert d.no_new_trajectory_witnessed is False
+        assert d.pass_start_max_seq is None
+
+    def test_existing_modes_unchanged(self):
+        from revolver.diagnosis import _derive_failure_mode
+
+        assert _derive_failure_mode(Diagnosis(driver_death_cycle=8)) == "driver-death"
+        assert _derive_failure_mode(Diagnosis(wall_kill_cycle=5)) == "wall-kill"
+        assert _derive_failure_mode(Diagnosis(stall_action="kill")) == "stall-kill"
+        assert _derive_failure_mode(Diagnosis()) == "none"
