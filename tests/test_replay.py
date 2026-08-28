@@ -19,6 +19,7 @@ from revolver.diagnosis import Diagnosis
 from revolver.fixes import (
     build_client_timeout_fix,
     build_inner_wall_fix,
+    build_outer_freshness_fix,
 )
 from revolver.proposal import PROPOSAL_NAMESPACE, propose
 
@@ -152,6 +153,194 @@ class TestInnerWallReplay:
         # No --inner-seconds token existed -> appended as the single delta line.
         assert "--inner-seconds 4200" in f.content
         assert "run_cycle" in f.content
+
+
+
+# ---------------------------------------------------------------------------
+# Cycle-16 (outer-freshness) replay: poisoning vs guard
+# ---------------------------------------------------------------------------
+#
+# DETERMINISTIC, no endpoints, no wall-clocks. We seed a stale trajectory
+# (exit:task_complete) + an inner stub that dies rc=124 with EMPTY output, then
+# assert:
+#   * the run-v3-shaped reader (the predecessor's "read the newest .json")
+#     reproduces the POISONING - it accepts the stale DONE as completion;
+#   * the run-v4-shaped reader (the generated pass-freshness guard) RE-INVOKES -
+#     it never accepts the stale file as completion.
+#
+# The v4 reader is exercised by EXECUTING the guard functions out of the
+# GENERATED run-v4 content (exec into a namespace), so the test validates the
+# actual generated code, not a re-implementation.
+
+
+def _cycle16_diagnosis() -> Diagnosis:
+    """A fixed cycle-16 outer-freshness diagnosis (pure, no sentry import)."""
+    return Diagnosis(
+        failure_mode="outer-freshness",
+        no_new_trajectory_witnessed=True,
+        pass_start_max_seq=26,
+        outer_wall=10800,
+        endpoint_pin="standard (.157:8080 fast-qwen / .161:8081 qwen)",
+        source="sentry-report",
+        evidence="cycle 14/15 unwitnessed inner death (rc=124 EMPTY)",
+    )
+
+
+def _seed_stale_trajectory(tmp_path, seq: int = 26) -> Path:
+    """Seed a PRIOR cycle's exit:task_complete trajectory (the stale file)."""
+    import json
+
+    traj_dir = tmp_path / "trajectories"
+    traj_dir.mkdir(parents=True, exist_ok=True)
+    stale = traj_dir / f"trajectory_{seq:04d}.json"
+    stale.write_text(
+        json.dumps(
+            {
+                "outcome": "exit:task_complete",
+                "messages": [
+                    {"role": "assistant", "content": "DONE"},
+                ],
+            }
+        )
+    )
+    return traj_dir
+
+
+def _v3_read_newest(trajectories_dir: Path) -> str:
+    """The predecessor's step-2 read (run-v3.py:84): the newest .json, unguarded.
+
+    This is the POISONING path: it globs the newest .json and reads its outcome
+    with NO branch for "nothing new this pass".
+    """
+    import glob
+    import json
+
+    p = sorted(glob.glob(str(trajectories_dir / "*.json")))[-1]
+    return json.load(open(p)).get("outcome", "?")
+
+
+def _v4_guard_namespace() -> dict:
+    """Exec the GENERATED run-v4 content into a namespace (validates real code)."""
+    files = {
+        f.path.rsplit("/", 1)[-1]: f
+        for f in build_outer_freshness_fix(_cycle16_diagnosis(), predecessor_runner="PRE")
+    }
+    runner = files["outer_freshness_run_v4.py"].content
+    ns: dict = {}
+    exec(compile(runner, "outer_freshness_run_v4.py", "exec"), ns)
+    return ns
+
+
+class TestOuterFreshnessReplay:
+    def test_emits_two_new_files(self):
+        files = build_outer_freshness_fix(
+            _cycle16_diagnosis(), predecessor_runner="PRE"
+        )
+        assert len(files) == 2
+        assert all(f.path.startswith(PROPOSAL_NAMESPACE) for f in files)
+
+    def test_every_file_carries_docstring_and_evidence(self):
+        for f in build_outer_freshness_fix(
+            _cycle16_diagnosis(), predecessor_runner="PRE"
+        ):
+            assert "Diff from predecessor:" in f.content
+            assert "Evidence:" in f.content
+            # The evidence cites both incident trajectories + the defect line.
+            assert "trajectory_0027" in f.content
+            assert "trajectory_0029" in f.content
+            assert "run-v3.py:84" in f.content
+
+    def test_v3_reader_reproduces_poisoning(self, tmp_path):
+        """The v3-shaped reader accepts the stale DONE as completion (the bug)."""
+        traj_dir = _seed_stale_trajectory(tmp_path)
+        # The v3 reader globs the newest .json and reads its outcome - it sees the
+        # stale exit:task_complete and would accept completion.
+        outcome = _v3_read_newest(traj_dir)
+        assert outcome == "exit:task_complete"
+
+    def test_v4_reader_reinvokes_on_stale(self, tmp_path):
+        """The v4-shaped guard RE-INVOKES: the stale file is never completion."""
+        traj_dir = _seed_stale_trajectory(tmp_path, seq=26)
+        ns = _v4_guard_namespace()
+        guard = ns["pass_freshness_guard"]
+        # pass_start_max_seq=26 (the pass-start snapshot). The newest trajectory is
+        # seq 26 (the stale file) - NOT newer than the snapshot.
+        assert guard(str(traj_dir), 26) is False
+        # => dead-unwitnessed => the generated main() would re-invoke (sys.exit(124)).
+        runner = build_outer_freshness_fix(
+            _cycle16_diagnosis(), predecessor_runner="PRE"
+        )[0].content
+        assert "DEAD-UNWITNESSED" in runner
+        assert "sys.exit(124)" in runner
+
+    def test_v4_reader_accepts_when_newer(self, tmp_path):
+        """When a NEWER trajectory exists, the guard passes (normal completion)."""
+        traj_dir = _seed_stale_trajectory(tmp_path, seq=26)
+        import json
+
+        # Seed a NEWER trajectory (seq 27) - this pass's real witness.
+        (traj_dir / "trajectory_0027.json").write_text(
+            json.dumps({"outcome": "exit:task_complete", "messages": []})
+        )
+        ns = _v4_guard_namespace()
+        guard = ns["pass_freshness_guard"]
+        assert guard(str(traj_dir), 26) is True
+
+    def test_generated_runner_is_valid_python(self):
+        files = {
+            f.path.rsplit("/", 1)[-1]: f
+            for f in build_outer_freshness_fix(
+                _cycle16_diagnosis(), predecessor_runner="PRE"
+            )
+        }
+        runner = files["outer_freshness_run_v4.py"].content
+        compile(runner, "outer_freshness_run_v4.py", "exec")
+
+    def test_driver_repoints_run_and_exports_timeout(self):
+        files = {
+            f.path.rsplit("/", 1)[-1]: f
+            for f in build_outer_freshness_fix(
+                _cycle16_diagnosis(), predecessor_runner="PRE"
+            )
+        }
+        driver = files["outer_freshness_driver.sh"].content
+        # RUN repointed at the generated run-v4 runner.
+        assert "RUN=revolver/fixes/outer_freshness_run_v4.py" in driver
+        # Exports FIVE_REQUEST_TIMEOUT >= the 10800s outer wall.
+        m = re.search(r"export FIVE_REQUEST_TIMEOUT=(\d+)", driver)
+        assert m is not None
+        assert int(m.group(1)) >= 10800
+        # Endpoint pins verbatim.
+        for tok in (
+            "FIVE_BASE_URL",
+            "FIVE_MODEL",
+            "FIVE_LARGE_URL",
+            "FIVE_LARGE_MODEL",
+            "FIVE_MAX_TOKENS",
+        ):
+            assert tok in driver
+
+    def test_proposal_validates_additions_only(self):
+        """The generated files pass the existing additive-path validation."""
+        from revolver.proposal import RepairProposal
+        from revolver.validation import check_imports, check_syntax
+
+        files = build_outer_freshness_fix(
+            _cycle16_diagnosis(), predecessor_runner="PRE"
+        )
+        proposal = RepairProposal(
+            pipeline_id="revolver",
+            diagnosis=_cycle16_diagnosis(),
+            new_files=files,
+        )
+        # Hard rule 7: additions only (all under PROPOSAL_NAMESPACE).
+        proposal.validate()
+        # Content validation: syntax + imports on every generated file.
+        for nf in files:
+            assert check_syntax(nf.content, path=nf.path).ok
+            if nf.path.endswith(".py"):
+                assert check_imports(nf.content, path=nf.path).ok
+
 
 
 if __name__ == "__main__":

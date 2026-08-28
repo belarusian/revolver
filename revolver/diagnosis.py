@@ -105,6 +105,17 @@ class Diagnosis:
     # The inner wall (--inner-seconds, seconds) the driver uses; templated into
     # the generated driver. None -> the generator uses its deterministic default.
     inner_seconds: int | None = None
+    # -- outer-freshness fix-class fields (Cycle 16, additive) --------------
+    # UNWITNESSED INNER DEATH / stale-trajectory-slot: the inner pass died
+    # (rc=124, EMPTY output — wall-kill before emit, block-buffered stdout lost)
+    # and NO trajectory newer than the pass-start snapshot exists, so the outer
+    # loop's "read the newest .json" step would read a PRIOR cycle's DONE and
+    # wrongly accept completion. Set True when that unwitnessed death is observed.
+    no_new_trajectory_witnessed: bool = False
+    # The max trajectory sequence number present at the START of the pass — the
+    # pass-freshness baseline. The newest trajectory must be NEWER than this to
+    # count as this pass's witness. None -> the generator uses its default.
+    pass_start_max_seq: int | None = None
 
     # -- derived properties -------------------------------------------------
 
@@ -116,6 +127,7 @@ class Diagnosis:
             or self.wall_kill_cycle is not None
             or self.inner_wall_kill_cycle is not None
             or self.client_timeout_cycle is not None
+            or self.no_new_trajectory_witnessed
             or self.stall_action == "kill"
         )
 
@@ -156,6 +168,8 @@ class Diagnosis:
             "heaviest_inner_duration": self.heaviest_inner_duration,
             "outer_wall": self.outer_wall,
             "inner_seconds": self.inner_seconds,
+            "no_new_trajectory_witnessed": self.no_new_trajectory_witnessed,
+            "pass_start_max_seq": self.pass_start_max_seq,
         }
 
     @classmethod
@@ -219,6 +233,8 @@ def _derive_failure_mode(d: Diagnosis) -> str:
         return "inner-wall"
     if d.client_timeout_cycle is not None:
         return "client-timeout"
+    if d.no_new_trajectory_witnessed:
+        return "outer-freshness"
     if d.wall_kill_cycle is not None:
         return "wall-kill"
     if d.stall_action == "kill":

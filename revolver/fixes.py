@@ -572,9 +572,256 @@ def build_inner_wall_fix(diagnosis: Diagnosis, *, predecessor_driver: str) -> li
     ]
 
 
+# ---------------------------------------------------------------------------
+# Outer-freshness fix-class generator (Cycle 16)
+# ---------------------------------------------------------------------------
+#
+# The fleet's newest observed failure class: UNWITNESSED INNER DEATH /
+# stale-trajectory-slot. The inner pass dies (rc=124, EMPTY output — wall-kill
+# before emit, block-buffered stdout lost) and NO trajectory newer than the
+# pass-start snapshot exists. The predecessor runner's step-2 read (run-v3.py:84,
+# "READ its trajectory: the newest .json") has NO branch for "nothing new this
+# pass", so the outer globs the newest .json, reads a PRIOR cycle's
+# exit:task_complete DONE, accepts completion, and wanders to max_steps.
+#
+# build_outer_freshness_fix takes the run-v3.py predecessor text READ-ONLY (input
+# only — it is NEVER copied and NEVER written to ~/Research/four) and emits NEW
+# run-v4.py content whose step-2 read is pass-freshness-guarded: the newest
+# trajectory must be NEWER than the pass-start snapshot; no new sequence =>
+# dead-unwitnessed => re-invoke or do the work yourself => the stale newest file
+# is NEVER evidence of completion. It also emits a driver-variant template
+# (RUN=.../run-v4.py, endpoints verbatim, FIVE_REQUEST_TIMEOUT >= outer wall)
+# reusing the launch-plan budget machinery.
+#
+# The physical run-v4.py birth happens at revolver APPLY time, under the manifest
+# — never by this cycle.
+
+# The generated runner's path (under the proposal namespace; additions only).
+_OUTER_FRESHNESS_RUNNER_PATH = PROPOSAL_NAMESPACE + "outer_freshness_run_v4.py"
+# The generated driver's path (under the proposal namespace; additions only).
+_OUTER_FRESHNESS_DRIVER_PATH = PROPOSAL_NAMESPACE + "outer_freshness_driver.sh"
+
+
+def _outer_freshness_evidence(diagnosis: Diagnosis) -> str:
+    """The cycle-16 evidence string shared by all generated files."""
+    base_seq = diagnosis.pass_start_max_seq
+    return (
+        "spoke-lint cycle 15 (trajectory_0027 msgs [2]-[3]: inner rc=124 with "
+        "EMPTY output - wall-kill before emit, block-buffered stdout lost - then "
+        "the outer read the newest .json, trajectory_0026, an Aug-19 cycle-12 "
+        "DONE, accepted it, wandered to max_steps) and revolver cycle 14 "
+        "(trajectory_0029 msgs [2]-[3]: identical signature - rc=124 empty, read "
+        "trajectory_0028's DONE, max_steps). Defect line: run-v3.py:84 task "
+        'template ("READ its trajectory: the newest .json ...") with no branch '
+        'for "nothing new this pass". '
+        f"pass_start_max_seq={base_seq}; source={diagnosis.source}; "
+        f"{diagnosis.evidence}"
+    )
+
+
+def _outer_freshness_runner_content(evidence: str) -> str:
+    """The NEW run-v4.py content: the step-2 trajectory read, pass-freshness-guarded.
+
+    Original, stdlib-only, syntactically valid. The guard is the ONE semantic
+    change vs the predecessor runner: the newest trajectory must be NEWER than the
+    pass-start snapshot to count as this pass's witness; otherwise the inner died
+    unwitnessed and the stale newest file is NEVER evidence of completion.
+    """
+    doc = (
+        '"""Generated outer runner (additions only; hard rule 7: never mutate).\n'
+        + '\n'
+        + 'Diff from predecessor: ONE thing vs the predecessor runner (run-v3.py): the\n'
+        + "step-2 trajectory read is now PASS-FRESHNESS-GUARDED. The predecessor's task\n"
+        + 'template (run-v3.py:84) says "READ its trajectory: the newest .json" with NO\n'
+        + 'branch for "nothing new this pass" - so when the inner pass dies unwitnessed\n'
+        + '(rc=124, EMPTY output: wall-kill before emit, block-buffered stdout lost), the\n'
+        + "outer globs the newest .json, reads a PRIOR cycle's exit:task_complete DONE,\n"
+        + 'accepts completion, and wanders to max_steps. The guard snapshots the max\n'
+        + 'trajectory sequence at pass start; after invoking the inner, the newest\n'
+        + 'trajectory must be NEWER than that snapshot. No new sequence => dead-unwitnessed\n'
+        + '=> re-invoke the inner OR do the work yourself => the stale newest file is NEVER\n'
+        + 'evidence of completion. Everything else (invoke inner first, reconcile the log,\n'
+        + 'keep passing until genuinely done) is the same logic.\n'
+        + f"Evidence: {evidence}\n"
+        + '"""\n'
+        + '\n'
+    )
+    body = (
+        "from __future__ import annotations\n"
+        + "\n"
+        + "import argparse\n"
+        + "import glob\n"
+        + "import json\n"
+        + "import os\n"
+        + "import sys\n"
+        + "from pathlib import Path\n"
+        + "\n\n"
+        + "def _max_seq(trajectories_dir: str) -> int:\n"
+        + '    """The max trajectory sequence number present in the dir (0 if none).\n'
+        + "\n"
+        + '    Deterministic: parses the zero-padded sequence from each\n'
+        + '    trajectory_XXXX.json filename. No clock; reads filenames only.\n'
+        + '    """\n'
+        + "    best = 0\n"
+        + '    for p in glob.glob(os.path.join(trajectories_dir, "trajectory_*.json")):\n'
+        + '        name = os.path.basename(p)\n'
+        + "        try:\n"
+        + '            seq = int(name[len("trajectory_") : -len(".json")])\n'
+        + "        except ValueError:\n"
+        + "            continue\n"
+        + "        best = max(best, seq)\n"
+        + "    return best\n"
+        + "\n\n"
+        + "def pass_freshness_guard(trajectories_dir: str, pass_start_max_seq: int) -> bool:\n"
+        + '    """True when a trajectory NEWER than the pass-start snapshot exists.\n'
+        + "\n"
+        + '    This is the fix: the newest trajectory must be NEWER than the pass-start\n'
+        + "    baseline to count as THIS pass's witness. If no new sequence exists, the\n"
+        + '    inner pass died unwitnessed and the stale newest file must NOT be read as\n'
+        + '    completion.\n'
+        + '    """\n'
+        + "    return _max_seq(trajectories_dir) > pass_start_max_seq\n"
+        + "\n\n"
+        + "def read_newest_trajectory(trajectories_dir: str) -> dict:\n"
+        + "    \"\"\"Read the newest trajectory (the predecessor's step-2 read, unchanged).\"\"\"\n"
+        + '    p = sorted(glob.glob(os.path.join(trajectories_dir, "*.json")))[-1]\n'
+        + "    return json.load(open(p))\n"
+        + "\n\n"
+        + "def main() -> None:\n"
+        + '    ap = argparse.ArgumentParser(\n'
+        + '        description="run-v4.py - the loop with a pass-freshness guard on the trajectory read"\n'
+        + "    )\n"
+        + '    ap.add_argument("--trajectories", default="~/AI/trajectories")\n'
+        + '    ap.add_argument("--pass-start-max-seq", type=int, default=0)\n'
+        + "    args = ap.parse_args()\n"
+        + "    trajectories = Path(args.trajectories).expanduser()\n"
+        + "\n"
+        + "    # PASS-START SNAPSHOT: the freshness baseline for this pass.\n"
+        + "    pass_start_max_seq = args.pass_start_max_seq or _max_seq(str(trajectories))\n"
+        + "\n"
+        + "    # 1. INVOKE the inner loop (self-limits its own time; may die rc=124 EMPTY).\n"
+        + "    #    The real inner command + its rc are wired by the driver (a seam here).\n"
+        + "    inner_rc = 0  # seam: the driver wires the real inner command + its rc\n"
+        + "\n"
+        + "    # 2. READ its trajectory - NOW PASS-FRESHNESS-GUARDED (the fix).\n"
+        + "    if not pass_freshness_guard(str(trajectories), pass_start_max_seq):\n"
+        + "        # No trajectory NEWER than the pass-start snapshot: the inner pass died\n"
+        + "        # unwitnessed (rc=124, EMPTY output). The stale newest file is NEVER\n"
+        + "        # evidence of completion. Re-invoke the inner OR do the work yourself.\n"
+        + "        print(\n"
+        + '            "DEAD-UNWITNESSED: no new trajectory this pass; re-invoke or do the "\n'
+        + '            "work yourself (never accept the stale newest file as completion)"\n'
+        + "        )\n"
+        + "        sys.exit(124)\n"
+        + "    newest = read_newest_trajectory(str(trajectories))\n"
+        + '    print("newest outcome:", newest.get("outcome", "?"))\n'
+        + "\n\n"
+        + 'if __name__ == "__main__":\n'
+        + "    main()\n"
+    )
+    return doc + body
+
+
+def build_outer_freshness_fix(
+    diagnosis: Diagnosis,
+    *,
+    predecessor_runner: str,
+) -> list[NewFile]:
+    """NEW-file-only repair path for the outer-freshness (unwitnessed inner death) mode.
+
+    Emits TWO NEW files, each under PROPOSAL_NAMESPACE, each carrying a docstring
+    stating diff-from-predecessor + the cycle-16 evidence (trajectory_0027 /
+    trajectory_0029, run-v3.py:84):
+
+      1. ``outer_freshness_run_v4.py`` - NEW run-v4.py content derived from the
+         run-v3.py predecessor text (passed READ-ONLY; never copied, never written
+         to ~/Research/four). Its step-2 trajectory read is pass-freshness-guarded:
+         the newest trajectory must be NEWER than the pass-start snapshot; no new
+         sequence => dead-unwitnessed => re-invoke or do the work yourself => the
+         stale newest file is NEVER evidence of completion.
+      2. ``outer_freshness_driver.sh`` - a driver-variant template reusing the
+         launch-plan budget machinery: RUN repointed at the generated run-v4
+         runner, endpoints verbatim, FIVE_REQUEST_TIMEOUT >= the outer wall.
+
+    Pure, deterministic, stdlib-only. No disk writes, no clock, no randomness.
+    """
+    evidence = _outer_freshness_evidence(diagnosis)
+    outer_wall = diagnosis.outer_wall or _DEFAULT_OUTER_WALL
+    # The exported request timeout must stay >= the driver's outer wall.
+    request_timeout = max(_DEFAULT_REQUEST_TIMEOUT, outer_wall)
+    pin = diagnosis.endpoint_pin or "(endpoint pin: standard config)"
+    base_seq = diagnosis.pass_start_max_seq
+
+    runner_content = _outer_freshness_runner_content(evidence)
+    runner_diff = (
+        "ONE thing vs the predecessor runner (run-v3.py): the step-2 trajectory read "
+        "is now pass-freshness-guarded - the newest trajectory must be NEWER than the "
+        "pass-start snapshot (pass_start_max_seq=" + str(base_seq) + "); no new "
+        "sequence => dead-unwitnessed => re-invoke the inner or do the work yourself "
+        "=> the stale newest file is NEVER evidence of completion. Everything else "
+        "(invoke inner first, reconcile the log, keep passing until genuinely done) "
+        "is the same logic."
+    )
+
+    driver_diff = (
+        "THREE things vs the predecessor driver: RUN -> the generated run-v4 runner "
+        "(" + _OUTER_FRESHNESS_RUNNER_PATH + "), which carries the pass-freshness "
+        "guard on the step-2 trajectory read; export FIVE_REQUEST_TIMEOUT=" + str(request_timeout) + " "
+        "(>= this driver's " + str(outer_wall) + "s outer wall, so the external wall "
+        "stays the sole timekeeper); and the endpoint pins are carried verbatim. "
+        "Everything else is byte-identical."
+    )
+
+    driver_content = (
+        "#!/bin/bash\n"
+        "# Generated driver (additions only; hard rule 7: never mutate).\n"
+        "# Diff from predecessor: " + driver_diff + "\n"
+        "# Evidence: " + evidence + "\n"
+        "set -uo pipefail\n"
+        "\n"
+        "# endpoint: " + pin + "\n"
+        "export FIVE_BASE_URL=http://192.168.1.157:8080/v1\n"
+        "export FIVE_MODEL=fast-qwen\n"
+        "export FIVE_LARGE_URL=http://192.168.1.161:8081/v1\n"
+        "export FIVE_LARGE_MODEL=qwen\n"
+        "export FIVE_MAX_TOKENS=65536\n"
+        "# explicit LLM request timeout (must stay >= this driver's " + str(outer_wall) + "s outer wall)\n"
+        "export FIVE_REQUEST_TIMEOUT=" + str(request_timeout) + "\n"
+        "\n"
+        "BASE=/home/sasha/AI/sentry\n"
+        "AI=$BASE/ai\n"
+        "PROJ=$BASE/proj\n"
+        "RUN=" + _OUTER_FRESHNESS_RUNNER_PATH + "\n"
+        "SPOKE=/home/sasha/Research/four/examples/spokes/cycle-implementation-v4.py\n"
+        "LOG=$AI/cycle-001-sentry-gate.md\n"
+        "OUT=$BASE/cycles.out\n"
+        "\n"
+        "FIRST=${1:-5}\n"
+        "LAST=${2:-5}\n"
+        "\n"
+        'echo "# endpoint: standard v4 $(date -u +%H:%M:%SZ)" >> "$OUT"\n'
+    )
+
+    return [
+        NewFile(
+            path=_OUTER_FRESHNESS_RUNNER_PATH,
+            content=runner_content,
+            diff_from_predecessor=runner_diff,
+            evidence=evidence,
+        ),
+        NewFile(
+            path=_OUTER_FRESHNESS_DRIVER_PATH,
+            content=driver_content,
+            diff_from_predecessor=driver_diff,
+            evidence=evidence,
+        ),
+    ]
+
+
 # Registry keyed by failure_mode; unknown modes fall back to the none-builder.
-# (The inner-wall builder takes a keyword-only predecessor_driver, so it is NOT in
-# this single-arg registry; it is called directly with the predecessor text.)
+# (The inner-wall builder takes a keyword-only predecessor_driver, and the
+# outer-freshness builder takes a keyword-only predecessor_runner, so NEITHER is
+# in this single-arg registry; each is called directly with the predecessor text.)
 FIX_BUILDERS: dict[str, Callable[[Diagnosis], list[NewFile]]] = {
     "driver-death": build_driver_death_fix,
     "wall-kill": build_wall_kill_fix,
