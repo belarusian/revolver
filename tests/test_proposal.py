@@ -187,7 +187,7 @@ class TestRoundTrip:
 
 class TestFixBuilders:
     def test_registry_covers_all_modes(self):
-        assert set(FIX_BUILDERS) == {"driver-death", "wall-kill", "stall-kill", "none"}
+        assert set(FIX_BUILDERS) == {"driver-death", "wall-kill", "stall-kill", "client-timeout", "none"}
 
     def test_none_builder_empty(self):
         assert build_none_fix(_diagnosis("none")) == []
