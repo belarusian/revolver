@@ -1,7 +1,7 @@
 # TICKET-066: inner-wall fix-class generator (sentry cycle 11)
 
 **Found:** 2026-08-27, operator re-prime (Build Order row "Fix-class templates + replay acceptance | 14-15").
-**Status:** Open — founding use case 2 of Revolver-task.md is not implemented.
+**Status:** DONE — implemented in revolver/fixes.py (build_inner_wall_fix); replay acceptance in tests/test_replay.py.
 **Severity:** high — the simple replay acceptance test ("if you can't do the simple one cleanly, stop").
 
 ## Evidence

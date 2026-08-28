@@ -1,7 +1,7 @@
 # TICKET-065: client-timeout fix-class generator (sentry cycle 8)
 
 **Found:** 2026-08-27, operator re-prime (Build Order row "Fix-class templates + replay acceptance | 14-15").
-**Status:** Open — founding use case 1 of Revolver-task.md is not implemented.
+**Status:** DONE — implemented in revolver/fixes.py (build_client_timeout_fix); replay acceptance in tests/test_replay.py.
 **Severity:** high — the hard replay acceptance test.
 
 ## Evidence

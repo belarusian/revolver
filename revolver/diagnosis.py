@@ -87,6 +87,24 @@ class Diagnosis:
     source: str = "sentry-report"
     raw: str = ""
     sentry_exit_code: int | None = None
+    # -- founding fix-class fields (Cycle 14, additive) ------------------
+    # client-timeout (the cancel-loop): client-side request cancels on long
+    # inferences. Set when the diagnosis carries evidence of the cancel-loop.
+    client_timeout_cycle: int | None = None
+    # inner-wall: a wall-kill AFTER the cycle merged (a heavy cycle). Set when
+    # the wall-kill happened on a cycle whose merge is already on main — this
+    # distinguishes it from wall-kill-no-merge (the merge is present here).
+    inner_wall_kill_cycle: int | None = None
+    # The observed heaviest inner duration (seconds) for the inner-wall mode;
+    # used by build_inner_wall_fix to derive the corrected --inner-seconds.
+    heaviest_inner_duration: int | None = None
+    # The outer wall-clock budget (seconds) the driver uses; the client-timeout
+    # driver must export FIVE_REQUEST_TIMEOUT >= this value. None -> the
+    # generator uses its deterministic default.
+    outer_wall: int | None = None
+    # The inner wall (--inner-seconds, seconds) the driver uses; templated into
+    # the generated driver. None -> the generator uses its deterministic default.
+    inner_seconds: int | None = None
 
     # -- derived properties -------------------------------------------------
 
@@ -96,6 +114,8 @@ class Diagnosis:
         return (
             self.driver_death_cycle is not None
             or self.wall_kill_cycle is not None
+            or self.inner_wall_kill_cycle is not None
+            or self.client_timeout_cycle is not None
             or self.stall_action == "kill"
         )
 
@@ -131,6 +151,11 @@ class Diagnosis:
             "source": self.source,
             "raw": self.raw,
             "sentry_exit_code": self.sentry_exit_code,
+            "client_timeout_cycle": self.client_timeout_cycle,
+            "inner_wall_kill_cycle": self.inner_wall_kill_cycle,
+            "heaviest_inner_duration": self.heaviest_inner_duration,
+            "outer_wall": self.outer_wall,
+            "inner_seconds": self.inner_seconds,
         }
 
     @classmethod
@@ -178,9 +203,22 @@ def _parse_int_list(s: str) -> list[int]:
 
 
 def _derive_failure_mode(d: Diagnosis) -> str:
-    """Derive a coarse failure-mode tag from the parsed fields."""
+    """Derive a coarse failure-mode tag from the parsed fields.
+
+    The two founding fix-class modes (Cycle 14) are added additively:
+    "inner-wall" (a wall-kill AFTER the cycle merged — the merge is present,
+    so it is NOT wall-kill-no-merge) and "client-timeout" (the cancel-loop).
+    They are checked before the plain "wall-kill" (no-merge) mode so the
+    presence of the merge is what distinguishes them. Existing modes are
+    unchanged: a diagnosis without the new fields set derives exactly as
+    before.
+    """
     if d.driver_death_cycle is not None:
         return "driver-death"
+    if d.inner_wall_kill_cycle is not None:
+        return "inner-wall"
+    if d.client_timeout_cycle is not None:
+        return "client-timeout"
     if d.wall_kill_cycle is not None:
         return "wall-kill"
     if d.stall_action == "kill":

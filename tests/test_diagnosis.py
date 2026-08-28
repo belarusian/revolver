@@ -301,3 +301,84 @@ class TestDiagnose:
 
         d = diagnose(tmp_path, read_file=fake_read, sentry_available=False)
         assert d.cycles_started == [7]
+
+
+# ---------------------------------------------------------------------------
+# Cycle 14: additive founding fix-class fields (client-timeout + inner-wall)
+# ---------------------------------------------------------------------------
+
+
+class TestFoundingFixClassFields:
+    def test_new_fields_default_none(self):
+        d = Diagnosis()
+        assert d.client_timeout_cycle is None
+        assert d.inner_wall_kill_cycle is None
+        assert d.heaviest_inner_duration is None
+
+    def test_derive_inner_wall(self):
+        d = Diagnosis(inner_wall_kill_cycle=11)
+        assert d.failure_mode == "none"  # not derived until _derive runs
+        from revolver.diagnosis import _derive_failure_mode
+
+        assert _derive_failure_mode(d) == "inner-wall"
+
+    def test_derive_client_timeout(self):
+        from revolver.diagnosis import _derive_failure_mode
+
+        d = Diagnosis(client_timeout_cycle=8)
+        assert _derive_failure_mode(d) == "client-timeout"
+
+    def test_inner_wall_takes_precedence_over_wall_kill(self):
+        # The merge is present (inner-wall) so it is NOT wall-kill-no-merge.
+        from revolver.diagnosis import _derive_failure_mode
+
+        d = Diagnosis(inner_wall_kill_cycle=11, wall_kill_cycle=11)
+        assert _derive_failure_mode(d) == "inner-wall"
+
+    def test_existing_modes_unchanged(self):
+        from revolver.diagnosis import _derive_failure_mode
+
+        assert _derive_failure_mode(Diagnosis(driver_death_cycle=8)) == "driver-death"
+        assert _derive_failure_mode(Diagnosis(wall_kill_cycle=5)) == "wall-kill"
+        assert _derive_failure_mode(Diagnosis(stall_action="kill")) == "stall-kill"
+        assert _derive_failure_mode(Diagnosis()) == "none"
+
+    def test_action_needed_new_modes(self):
+        assert Diagnosis(inner_wall_kill_cycle=11).action_needed is True
+        assert Diagnosis(client_timeout_cycle=8).action_needed is True
+        assert Diagnosis().action_needed is False
+
+    def test_to_dict_from_dict_round_trip(self):
+        d = Diagnosis(
+            inner_wall_kill_cycle=11,
+            client_timeout_cycle=8,
+            heaviest_inner_duration=3200,
+        )
+        rt = Diagnosis.from_dict(d.to_dict())
+        assert rt.inner_wall_kill_cycle == 11
+        assert rt.client_timeout_cycle == 8
+        assert rt.heaviest_inner_duration == 3200
+        assert rt.to_dict() == d.to_dict()
+
+    def test_old_dict_without_new_fields_still_loads(self):
+        old = {
+            "pipeline_id": "x",
+            "failure_mode": "none",
+            "sentry_exit_code": None,
+        }
+        d = Diagnosis.from_dict(old)
+        assert d.inner_wall_kill_cycle is None
+        assert d.client_timeout_cycle is None
+        assert d.heaviest_inner_duration is None
+
+    def test_outer_wall_and_inner_seconds_round_trip(self):
+        d = Diagnosis(outer_wall=10800, inner_seconds=3000)
+        rt = Diagnosis.from_dict(d.to_dict())
+        assert rt.outer_wall == 10800
+        assert rt.inner_seconds == 3000
+        assert rt.to_dict() == d.to_dict()
+
+    def test_outer_wall_and_inner_seconds_default_none(self):
+        d = Diagnosis()
+        assert d.outer_wall is None
+        assert d.inner_seconds is None

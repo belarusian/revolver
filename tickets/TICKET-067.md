@@ -1,7 +1,7 @@
 # TICKET-067: replay acceptance tests for both founding fix classes
 
 **Found:** 2026-08-27, operator re-prime (Build Order row "Fix-class templates + replay acceptance | 14-15").
-**Status:** Open — the done criteria of Revolver-task.md are currently uncheckable.
+**Status:** DONE — replay acceptance tests landed in tests/test_replay.py (12 tests, pure).
 **Severity:** high — these tests are the project's acceptance contract.
 
 ## Evidence
