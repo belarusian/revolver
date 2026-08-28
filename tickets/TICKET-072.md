@@ -1,6 +1,6 @@
 # TICKET-072 — driver-variant template for the outer-freshness fix
 
-**Status:** Open
+**Status:** DONE
 **Cycle:** 16
 **Build Order row:** Outer-freshness guard — run-v4 meta-derivation (16)
 

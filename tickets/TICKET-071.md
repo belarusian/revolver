@@ -1,6 +1,6 @@
 # TICKET-071 — build_outer_freshness_fix generator (run-v4 meta-derivation)
 
-**Status:** Open
+**Status:** DONE
 **Cycle:** 16
 **Build Order row:** Outer-freshness guard — run-v4 meta-derivation (16)
 

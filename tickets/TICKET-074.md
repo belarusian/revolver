@@ -1,6 +1,6 @@
 # TICKET-074 — gate + additive-path validation on generated files
 
-**Status:** Open
+**Status:** DONE
 **Cycle:** 16
 **Build Order row:** Outer-freshness guard — run-v4 meta-derivation (16)
 

@@ -1,6 +1,6 @@
 # TICKET-070 — Diagnosis intake fields for the outer-freshness class
 
-**Status:** Open
+**Status:** DONE
 **Cycle:** 16
 **Build Order row:** Outer-freshness guard — run-v4 meta-derivation (16)
 

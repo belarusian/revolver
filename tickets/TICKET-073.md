@@ -1,6 +1,6 @@
 # TICKET-073 — deterministic replay acceptance tests (poisoning vs guard)
 
-**Status:** Open
+**Status:** DONE
 **Cycle:** 16
 **Build Order row:** Outer-freshness guard — run-v4 meta-derivation (16)
 
