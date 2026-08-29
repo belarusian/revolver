@@ -1,6 +1,6 @@
 # TICKET-076 — `revolver/derive.py`: predecessor-in, versioned-variant-out, verification by construction
 
-**Status:** TODO
+**Status:** DONE
 **Cycle:** 17
 **Build Order row:** Derive-by-reference (17–19)
 

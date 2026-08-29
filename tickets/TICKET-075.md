@@ -1,6 +1,6 @@
 # TICKET-075 — Seed-triple pin: meta-dir copies + sha256 verification (references, not values)
 
-**Status:** TODO
+**Status:** DONE
 **Cycle:** 17
 **Build Order row:** Derive-by-reference (17–19)
 
