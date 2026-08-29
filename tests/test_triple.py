@@ -75,7 +75,11 @@ class TestVerifyTriple:
             verify_triple(tmp_path)
 
     def test_verify_raises_on_missing_element(self, tmp_path: Path):
-        # A missing element is a mismatch (the baseline is incomplete).
+        # A missing element is a mismatch (the baseline is incomplete). The stub
+        # path only holds off-plane (where the seed sources are absent); on the
+        # execution plane the real source is present, so skip (GitHub lens).
+        if all(src.is_file() for _d, src in TRIPLE.values()):
+            pytest.skip("seed triple present on this plane (execution plane)")
         for name, (_digest, source) in TRIPLE.items():
             if name == "run-cycles-v3.sh":
                 continue
