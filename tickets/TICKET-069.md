@@ -1,6 +1,6 @@
 # TICKET-069 — generator unit tests (build_client_timeout_fix + build_inner_wall_fix)
 
-**Status:** OPEN
+**Status:** DONE
 **Cycle:** 14 (Fix-class templates + replay acceptance, cycles 14-15)
 
 ## Capability
