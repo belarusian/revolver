@@ -383,7 +383,9 @@ def diagnose(
     """
     project_dir = Path(project_dir)
     if read_file is None:
-        read_file = lambda p: p.read_text()
+
+        def read_file(p: Path) -> str:
+            return p.read_text()
 
     if sentry_available is None:
         try:
