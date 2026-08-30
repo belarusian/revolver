@@ -178,14 +178,11 @@ class TestClientTimeoutReplay:
         gen_body = _strip_derive_header(gen_cm.content, is_py=True)
         pred_lines = pred_text.splitlines(keepends=True)
         gen_lines = gen_body.splitlines(keepends=True)
-        diff = list(difflib.unified_diff(pred_lines, gen_lines, n=0))
-        # The diff should be non-empty (there IS a change) and limited to
-        # the stated replacement line.
-        assert len(diff) > 0, "expected a non-empty diff"
-        # Count changed lines (excluding headers): should be exactly 1 deletion
-        # and 1 addition (a single-line replacement).
-        deletions = [ln for ln in diff if ln.startswith("-") and not ln.startswith("---")]
-        additions = [ln for ln in diff if ln.startswith("+") and not ln.startswith("+++")]
+        # Opcode-based change counting (see _changed_lines): a content line
+        # like '--inner-seconds 2400' becomes '---inner-seconds 2400' in a
+        # unified diff and would be misclassified as a file header by prefix
+        # filtering. Opcodes have no such ambiguity.
+        deletions, additions = _changed_lines(pred_lines, gen_lines)
         assert len(deletions) == 1, (
             f"expected 1 deletion, got {len(deletions)}: {deletions}"
         )
@@ -302,9 +299,7 @@ class TestInnerWallReplay:
         gen_body = _strip_derive_header(f.content, is_py=False)
         pred_lines = pred_text.splitlines(keepends=True)
         gen_lines = gen_body.splitlines(keepends=True)
-        diff = list(difflib.unified_diff(pred_lines, gen_lines, n=0))
-        deletions = [ln for ln in diff if ln.startswith("-") and not ln.startswith("---")]
-        additions = [ln for ln in diff if ln.startswith("+") and not ln.startswith("+++")]
+        deletions, additions = _changed_lines(pred_lines, gen_lines)
         assert len(deletions) == 1, (
             f"expected 1 deletion, got {len(deletions)}: {deletions}"
         )
@@ -618,6 +613,27 @@ class TestBrokenInstructionFails:
 # ---------------------------------------------------------------------------
 # Helper: strip the derive header from generated content
 # ---------------------------------------------------------------------------
+
+
+def _changed_lines(
+    pred_lines: list[str], gen_lines: list[str]
+) -> tuple[list[str], list[str]]:
+    """(deleted, added) lines between predecessor and derived body.
+
+    Uses SequenceMatcher opcodes, NOT unified_diff prefix parsing: a content
+    line like '--inner-seconds 2400' renders as '---inner-seconds 2400' in a
+    unified diff and is indistinguishable from a file header by prefix alone.
+    Opcodes classify by structure, not by string shape.
+    """
+    sm = difflib.SequenceMatcher(None, pred_lines, gen_lines)
+    deleted: list[str] = []
+    added: list[str] = []
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag in ("replace", "delete"):
+            deleted.extend(pred_lines[i1:i2])
+        if tag in ("replace", "insert"):
+            added.extend(gen_lines[j1:j2])
+    return deleted, added
 
 
 def _strip_derive_header(content: str, *, is_py: bool) -> str:
