@@ -534,16 +534,8 @@ def build_inner_wall_fix(diagnosis: Diagnosis, *, predecessor_driver: str) -> li
     # Derive the corrected inner wall.
     if diagnosis.heaviest_inner_duration is not None:
         old_inner = diagnosis.heaviest_inner_duration
-        basis = (
-            f"the observed heaviest inner duration ({old_inner}s) plus a stated margin "
-            f"of {_INNER_WALL_MARGIN}s"
-        )
     else:
         old_inner = diagnosis.inner_seconds or _DEFAULT_INNER_SECONDS
-        basis = (
-            f"the old inner wall ({old_inner}s) plus a stated margin of "
-            f"{_INNER_WALL_MARGIN}s"
-        )
     new_inner = old_inner + _INNER_WALL_MARGIN
 
     # Compose the single stated edit (DATA, not code).
