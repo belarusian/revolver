@@ -140,10 +140,13 @@ class TestClientTimeoutReplay:
             # Now exec the runner's import line in a namespace that can resolve
             # the staged module.
             runner_content = files["client_timeout_runner.py"].content
+            # startswith, not `in`: the derive header QUOTES the import text
+            # ("Diff from predecessor: ... 'from four.chat_model_v2 import ...'"),
+            # so a substring match would grab the prose line, not the statement.
             import_line = next(
                 ln
                 for ln in runner_content.splitlines()
-                if "from four.chat_model_v2 import" in ln
+                if ln.lstrip().startswith("from four.chat_model_v2 import")
             )
             ns: dict = {}
             exec(import_line, ns)  # noqa: S102 — executing the GENERATED artifact is the point
