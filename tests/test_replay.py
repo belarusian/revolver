@@ -101,9 +101,21 @@ class TestClientTimeoutReplay:
             for f in build_client_timeout_fix(_cycle8_diagnosis())
         }
         # Stage the chat-model as four/chat_model_v2.py in a temp package.
+        # Also stage four/chat_model.py (the base module that chat_model_v2
+        # imports _ChatCompletionsText from).
         pkg_dir = tmp_path / "four"
         pkg_dir.mkdir()
         (pkg_dir / "__init__.py").write_text("", encoding="utf-8")
+        # Minimal base module providing _ChatCompletionsText.
+        (pkg_dir / "chat_model.py").write_text(
+            "class _ChatCompletionsText:\n"
+            "    def __init__(self, model, base_url, api_key, timeout=None):\n"
+            "        self.model = model\n"
+            "        self.timeout = timeout\n"
+            "    def __call__(self, messages):\n"
+            "        return 'ok'\n",
+            encoding="utf-8",
+        )
         (pkg_dir / "chat_model_v2.py").write_text(
             files["client_timeout_chat_model.py"].content, encoding="utf-8"
         )
@@ -130,10 +142,11 @@ class TestClientTimeoutReplay:
             sys.path.remove(str(tmp_path))
             # Clean up the imported module so it doesn't leak.
             sys.modules.pop("four.chat_model_v2", None)
+            sys.modules.pop("four.chat_model", None)
             sys.modules.pop("four", None)
 
     def test_diff_isolation(self):
-        """For every generated .py file, difflib diff vs its predecessor ==
+        """For the generated chat-model, difflib diff vs its predecessor ==
         exactly the instruction's stated lines (byte-identity of everything else)."""
         files = build_client_timeout_fix(_cycle8_diagnosis())
         # The chat-model predecessor is the pinned triple file.
@@ -142,11 +155,13 @@ class TestClientTimeoutReplay:
             pytest.skip("triple/chat_model.py not present")
         pred_text = pred_cm.read_text(encoding="utf-8")
         gen_cm = next(
-            f for f in files if f.path.rsplit("/", 1)[-1] == "client_timeout_chat_model.py"
+            f
+            for f in files
+            if f.path.rsplit("/", 1)[-1] == "client_timeout_chat_model.py"
         )
         # Strip the derive header (docstring block) from the generated content
         # to get the pure body for diffing.
-        gen_body = _strip_derive_header(gen_cm.content)
+        gen_body = _strip_derive_header(gen_cm.content, is_py=True)
         pred_lines = pred_text.splitlines(keepends=True)
         gen_lines = gen_body.splitlines(keepends=True)
         diff = list(difflib.unified_diff(pred_lines, gen_lines, n=0))
@@ -157,11 +172,18 @@ class TestClientTimeoutReplay:
         # and 1 addition (a single-line replacement).
         deletions = [ln for ln in diff if ln.startswith("-") and not ln.startswith("---")]
         additions = [ln for ln in diff if ln.startswith("+") and not ln.startswith("+++")]
-        assert len(deletions) == 1, f"expected 1 deletion, got {len(deletions)}: {deletions}"
-        assert len(additions) == 1, f"expected 1 addition, got {len(additions)}: {additions}"
+        assert len(deletions) == 1, (
+            f"expected 1 deletion, got {len(deletions)}: {deletions}"
+        )
+        assert len(additions) == 1, (
+            f"expected 1 addition, got {len(additions)}: {additions}"
+        )
 
     def test_chat_model_passes_timeout_to_both_impls(self):
-        files = {f.path.rsplit("/", 1)[-1]: f for f in build_client_timeout_fix(_cycle8_diagnosis())}
+        files = {
+            f.path.rsplit("/", 1)[-1]: f
+            for f in build_client_timeout_fix(_cycle8_diagnosis())
+        }
         cm = files["client_timeout_chat_model.py"].content
         # Reads the env var with the 21600s default (the one stated edit).
         assert 'os.getenv("FIVE_REQUEST_TIMEOUT", "21600")' in cm
@@ -180,7 +202,10 @@ class TestClientTimeoutReplay:
         assert "large_impl = _ChatCompletionsText(" in cm
 
     def test_driver_exports_timeout_ge_outer_wall_and_repoints(self):
-        files = {f.path.rsplit("/", 1)[-1]: f for f in build_client_timeout_fix(_cycle8_diagnosis())}
+        files = {
+            f.path.rsplit("/", 1)[-1]: f
+            for f in build_client_timeout_fix(_cycle8_diagnosis())
+        }
         driver = files["client_timeout_driver.sh"].content
         # Exports FIVE_REQUEST_TIMEOUT >= the 10800s outer wall.
         m = re.search(r"export FIVE_REQUEST_TIMEOUT=(\d+)", driver)
@@ -188,7 +213,10 @@ class TestClientTimeoutReplay:
         assert int(m.group(1)) >= 10800
         # Repoints RUN/SPOKE at the new files.
         assert "RUN=/home/sasha/Research/four/run-v3.py" in driver
-        assert "SPOKE=/home/sasha/Research/four/examples/spokes/cycle-implementation-v4.py" in driver
+        assert (
+            "SPOKE=/home/sasha/Research/four/examples/spokes/cycle-implementation-v4.py"
+            in driver
+        )
 
     def test_propose_yields_client_timeout_path(self):
         p = propose(_cycle8_diagnosis())
@@ -217,12 +245,13 @@ def _write_predecessor(tmp_path: Path, text: str = _PREDECESSOR_DRIVER_TEXT) -> 
 
 
 def _cycle11_diagnosis() -> Diagnosis:
-    """A fixed cycle-11 inner-wall diagnosis."""
+    """A fixed cycle-11 inner-wall diagnosis (pure, no sentry import)."""
     return Diagnosis(
         failure_mode="inner-wall",
         inner_wall_kill_cycle=11,
-        inner_seconds=2400,
+        heaviest_inner_duration=2400,
         source="sentry-report",
+        evidence="cycle 11 wall-kill after merge",
     )
 
 
@@ -243,7 +272,11 @@ class TestInnerWallReplay:
         # (It may appear quoted in the diff-statement header — that is expected.)
         assert "\n--inner-seconds 2400\n" not in content
         # Everything else from the predecessor is byte-identical.
-        for line in ("export FIVE_MODEL=fast-qwen", "export FIVE_LARGE_MODEL=qwen", "run_cycle"):
+        for line in (
+            "export FIVE_MODEL=fast-qwen",
+            "export FIVE_LARGE_MODEL=qwen",
+            "run_cycle",
+        ):
             assert line in content
 
     def test_diff_isolation(self, tmp_path: Path):
@@ -251,14 +284,19 @@ class TestInnerWallReplay:
         pred_text = _PREDECESSOR_DRIVER_TEXT
         pred = _write_predecessor(tmp_path)
         f = build_inner_wall_fix(_cycle11_diagnosis(), predecessor_driver=pred)[0]
-        gen_body = _strip_derive_header(f.content)
+        # The predecessor is a .sh file, so the derive header uses # comments.
+        gen_body = _strip_derive_header(f.content, is_py=False)
         pred_lines = pred_text.splitlines(keepends=True)
         gen_lines = gen_body.splitlines(keepends=True)
         diff = list(difflib.unified_diff(pred_lines, gen_lines, n=0))
         deletions = [ln for ln in diff if ln.startswith("-") and not ln.startswith("---")]
         additions = [ln for ln in diff if ln.startswith("+") and not ln.startswith("+++")]
-        assert len(deletions) == 1, f"expected 1 deletion, got {len(deletions)}: {deletions}"
-        assert len(additions) == 1, f"expected 1 addition, got {len(additions)}: {additions}"
+        assert len(deletions) == 1, (
+            f"expected 1 deletion, got {len(deletions)}: {deletions}"
+        )
+        assert len(additions) == 1, (
+            f"expected 1 addition, got {len(additions)}: {additions}"
+        )
         # The deleted line is the old --inner-seconds; the added line is the new.
         assert "--inner-seconds 2400" in deletions[0]
         assert "--inner-seconds 4200" in additions[0]
@@ -413,13 +451,8 @@ class TestOuterFreshnessReplay:
         assert callable(ns["pass_freshness_guard"])
 
     def test_diff_isolation(self):
-        """For the generated runner, difflib diff vs predecessor == stated lines.
-
-        The outer-freshness builder uses predecessor_runner="PRE" as a sentinel
-        (the runner is a full rewrite, not a line-substitution). The diff
-        isolation check here verifies the generated file is self-consistent:
-        it compiles and the guard function is present.
-        """
+        """For the generated runner, verify structural invariants of the
+        full-rewrite derivation (not a 1-line diff)."""
         files = {
             f.path.rsplit("/", 1)[-1]: f
             for f in build_outer_freshness_fix(
@@ -537,7 +570,7 @@ class TestOuterFreshnessReplay:
 
 class TestBrokenInstructionFails:
     def test_broken_instruction_fails_at_derive(self, tmp_path: Path):
-        """A deliberately broken instruction (wrong replacement text) makes the
+        """A deliberately broken instruction (wrong target text) makes the
         proposal fail at derive time; the test proves it raises."""
         from revolver.derive import DerivationError
 
@@ -565,24 +598,38 @@ class TestBrokenInstructionFails:
 
 
 # ---------------------------------------------------------------------------
-# Helper: strip the derive docstring header from generated content
+# Helper: strip the derive header from generated content
 # ---------------------------------------------------------------------------
 
 
-def _strip_derive_header(content: str) -> str:
-    """Remove the derive() docstring header (the triple-quoted block at the top)
-    to expose the pure body for diffing against the predecessor."""
+def _strip_derive_header(content: str, *, is_py: bool) -> str:
+    """Remove the derive() header from generated content to expose the pure body.
+
+    For .py files the header is a triple-quoted docstring.
+    For .sh files the header is a block of # comment lines.
+    """
     lines = content.splitlines(keepends=True)
-    # The header starts with a docstring (""") and ends at the closing """.
-    # Find the closing triple-quote.
-    if lines and lines[0].lstrip().startswith('"""'):
-        # Multi-line docstring: find the closing """.
-        for i in range(1, len(lines)):
-            if '"""' in lines[i]:
-                return "".join(lines[i + 1 :])
-        # Single-line docstring (unlikely but handle it).
-        return "".join(lines[1:])
-    return content
+    if not lines:
+        return content
+
+    if is_py:
+        # The header starts with a docstring (""") and ends at the closing """.
+        if lines[0].lstrip().startswith('"""'):
+            for i in range(1, len(lines)):
+                if '"""' in lines[i]:
+                    return "".join(lines[i + 1 :])
+            # Single-line docstring (unlikely but handle it).
+            return "".join(lines[1:])
+        return content
+    else:
+        # For .sh files, the header is a block of # comment lines at the top.
+        # Find the first non-comment, non-empty line.
+        for i, ln in enumerate(lines):
+            stripped = ln.strip()
+            if stripped and not stripped.startswith("#"):
+                return "".join(lines[i:])
+        # All comments (unlikely).
+        return content
 
 
 if __name__ == "__main__":
