@@ -640,13 +640,15 @@ def _strip_derive_header(content: str, *, is_py: bool) -> str:
             return "".join(lines[1:])
         return content
     else:
-        # For .sh files, the header is a block of # comment lines at the top.
-        # Find the first non-comment, non-empty line.
+        # For .sh files, the derive header is a block of "# "-prefixed comment
+        # lines. The shebang (#!) is NOT a header line — it terminates the
+        # header and belongs to the body (the predecessor starts with it).
         for i, ln in enumerate(lines):
             stripped = ln.strip()
-            if stripped and not stripped.startswith("#"):
-                return "".join(lines[i:])
-        # All comments (unlikely).
+            if stripped.startswith("# ") or stripped == "#":
+                continue
+            return "".join(lines[i:])
+        # All header (unlikely).
         return content
 
 
