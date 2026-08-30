@@ -1,6 +1,6 @@
 # TICKET-080 — Split of TICKET-077 (cycle 18, re-scoped): migrate build_client_timeout_fix to derive
 
-**Status: Open**
+**Status: DONE**
 **Source: composer split of cycle 18 (TICKET-077) — one builder per bounded pass.**
 
 ## Scope (this pass ONLY)
