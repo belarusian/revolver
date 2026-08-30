@@ -503,17 +503,22 @@ def build_inner_wall_fix(diagnosis: Diagnosis, *, predecessor_driver: str) -> li
     """NEW-file-only repair path for the inner-wall failure mode (wall-kill AFTER merge).
 
     Emits ONE new file — a driver variant whose ONLY delta is a larger
-    ``--inner-seconds``. The generator takes the predecessor driver text as input and
-    applies the single substitution, so everything else is byte-identical by
-    construction.
+    --inner-seconds. This builder is a THIN INSTRUCTION EMITTER over
+    :func:: it composes a single :class:
+    (replace the --inner-seconds value) and hands the predecessor PATH to
+    derive(), which reads the file read-only, applies the edit, and verifies
+    by construction (compile + diff == stated lines).
 
     The new inner-seconds value is derived from the observed heaviest inner duration
     when the diagnosis carries one (plus a stated margin), else a stated margin over
-    the old value. The docstring states the diff + the cycle-11 evidence.
+    the old value.
 
     Pure, deterministic, stdlib-only. No disk writes, no clock, no randomness.
+    The predecessor is referenced by PATH (never embedded as text).
     """
-    import re
+    from pathlib import Path
+
+    from revolver.derive import ChangeInstruction, derive
 
     cycle = diagnosis.inner_wall_kill_cycle
     evidence = (
@@ -541,33 +546,24 @@ def build_inner_wall_fix(diagnosis: Diagnosis, *, predecessor_driver: str) -> li
         )
     new_inner = old_inner + _INNER_WALL_MARGIN
 
-    # Apply the single substitution to the predecessor driver text.
-    pattern = re.compile(r"(--inner-seconds[= ])\d+")
-    if pattern.search(predecessor_driver):
-        new_content_body = pattern.sub(lambda m: f"{m.group(1)}{new_inner}", predecessor_driver, count=1)
-    else:
-        # No --inner-seconds token present: append it as the single delta line so the
-        # rest of the predecessor text stays byte-identical.
-        new_content_body = predecessor_driver.rstrip("\n") + f"\n--inner-seconds {new_inner}\n"
+    # Compose the single stated edit (DATA, not code).
+    instruction = ChangeInstruction(
+        kind="replace-value",
+        target=f"--inner-seconds {old_inner}",
+        replacement=f"--inner-seconds {new_inner}",
+        new_name=PROPOSAL_NAMESPACE + "inner_wall_driver.sh",
+        evidence=evidence,
+    )
 
-    diff = (
-        f"ONE thing vs the predecessor driver: --inner-seconds raised from {old_inner}s "
-        f"to {new_inner}s (derived from {basis}). Everything else is byte-identical — "
-        "the generator applies a single substitution."
-    )
-    content = (
-        "# Generated inner-wall driver (additions only; hard rule 7: never mutate).\n"
-        f"# Diff from predecessor: {diff}\n"
-        f"# Evidence: {evidence}\n"
-        f"{new_content_body}"
-    )
+    # Derive by reference: read the predecessor PATH, apply the edit, verify.
+    variant = derive(Path(predecessor_driver), instruction)
 
     return [
         NewFile(
-            path=PROPOSAL_NAMESPACE + "inner_wall_driver.sh",
-            content=content,
-            diff_from_predecessor=diff,
-            evidence=evidence,
+            path=variant.path,
+            content=variant.content,
+            diff_from_predecessor=variant.diff_from_predecessor,
+            evidence=variant.evidence,
         ),
     ]
 

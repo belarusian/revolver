@@ -22,6 +22,7 @@ from revolver.fixes import (
     build_outer_freshness_fix,
 )
 from revolver.proposal import PROPOSAL_NAMESPACE, propose
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Cycle-8 (client-timeout) replay
@@ -92,13 +93,20 @@ class TestClientTimeoutReplay:
 # Cycle-11 (inner-wall) replay
 # ---------------------------------------------------------------------------
 
-_PREDECESSOR_DRIVER = (
+_PREDECESSOR_DRIVER_TEXT = (
     "#!/bin/bash\n"
     "export FIVE_MODEL=fast-qwen\n"
     "export FIVE_LARGE_MODEL=qwen\n"
     "--inner-seconds 2400\n"
     "run_cycle\n"
 )
+
+
+def _write_predecessor(tmp_path: Path, text: str = _PREDECESSOR_DRIVER_TEXT) -> str:
+    """Write the predecessor driver to a temp file; return its path as str."""
+    p = tmp_path / "predecessor_driver.sh"
+    p.write_text(text, encoding="utf-8")
+    return str(p)
 
 
 def _cycle11_diagnosis() -> Diagnosis:
@@ -113,49 +121,61 @@ def _cycle11_diagnosis() -> Diagnosis:
 
 
 class TestInnerWallReplay:
-    def test_emits_one_new_file(self):
-        files = build_inner_wall_fix(_cycle11_diagnosis(), predecessor_driver=_PREDECESSOR_DRIVER)
+    def test_emits_one_new_file(self, tmp_path: Path):
+        pred = _write_predecessor(tmp_path)
+        files = build_inner_wall_fix(_cycle11_diagnosis(), predecessor_driver=pred)
         assert len(files) == 1
         assert files[0].path.startswith(PROPOSAL_NAMESPACE)
 
-    def test_only_delta_is_inner_seconds(self):
-        f = build_inner_wall_fix(_cycle11_diagnosis(), predecessor_driver=_PREDECESSOR_DRIVER)[0]
+    def test_only_delta_is_inner_seconds(self, tmp_path: Path):
+        pred = _write_predecessor(tmp_path)
+        f = build_inner_wall_fix(_cycle11_diagnosis(), predecessor_driver=pred)[0]
         content = f.content
         # The corrected inner wall: heaviest (2400) + margin (1800) = 4200.
         assert "--inner-seconds 4200" in content
-        # The old value is gone (single substitution, not an append).
-        assert "--inner-seconds 2400" not in content
+        # The old value is gone from the driver body (single substitution).
+        # (It may appear quoted in the diff-statement header — that is expected.)
+        assert "\n--inner-seconds 2400\n" not in content
         # Everything else from the predecessor is byte-identical.
         for line in ("export FIVE_MODEL=fast-qwen", "export FIVE_LARGE_MODEL=qwen", "run_cycle"):
             assert line in content
 
-    def test_carries_docstring(self):
-        f = build_inner_wall_fix(_cycle11_diagnosis(), predecessor_driver=_PREDECESSOR_DRIVER)[0]
+    def test_carries_docstring(self, tmp_path: Path):
+        pred = _write_predecessor(tmp_path)
+        f = build_inner_wall_fix(_cycle11_diagnosis(), predecessor_driver=pred)[0]
         assert "Diff from predecessor:" in f.content
         assert "Evidence:" in f.content
 
-    def test_margin_over_old_when_no_heaviest(self):
+    def test_margin_over_old_when_no_heaviest(self, tmp_path: Path):
         d = Diagnosis(
             failure_mode="inner-wall",
             inner_wall_kill_cycle=11,
             inner_seconds=3000,
             source="sentry-report",
         )
-        f = build_inner_wall_fix(d, predecessor_driver=_PREDECESSOR_DRIVER)[0]
+        # Predecessor must carry the old value (3000) for the target to match.
+        pred_text = (
+            "#!/bin/bash\n"
+            "export FIVE_MODEL=fast-qwen\n"
+            "export FIVE_LARGE_MODEL=qwen\n"
+            "--inner-seconds 3000\n"
+            "run_cycle\n"
+        )
+        pred = _write_predecessor(tmp_path, text=pred_text)
+        f = build_inner_wall_fix(d, predecessor_driver=pred)[0]
         # Old inner wall (3000) + margin (1800) = 4800.
         assert "--inner-seconds 4800" in f.content
-        assert "--inner-seconds 2400" not in f.content
+        assert "\n--inner-seconds 3000\n" not in f.content
 
-    def test_appends_when_no_token_present(self):
+    def test_fails_loud_when_token_absent(self, tmp_path: Path):
+        """Derive-by-reference fails loud when the target line is not in the predecessor."""
+        from revolver.derive import DerivationError
+
         d = _cycle11_diagnosis()
         pre = "#!/bin/bash\nexport FIVE_MODEL=fast-qwen\nrun_cycle\n"
-        f = build_inner_wall_fix(d, predecessor_driver=pre)[0]
-        # No --inner-seconds token existed -> appended as the single delta line.
-        assert "--inner-seconds 4200" in f.content
-        assert "run_cycle" in f.content
-
-
-
+        pred = _write_predecessor(tmp_path, text=pre)
+        with pytest.raises(DerivationError, match="matched 0 line"):
+            build_inner_wall_fix(d, predecessor_driver=pred)
 # ---------------------------------------------------------------------------
 # Cycle-16 (outer-freshness) replay: poisoning vs guard
 # ---------------------------------------------------------------------------
