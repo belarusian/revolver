@@ -1,6 +1,6 @@
 # TICKET-079 — Split of TICKET-077 (cycle 18, re-scoped): migrate build_inner_wall_fix to derive
 
-**Status: Open**
+**Status: DONE**
 **Source: composer split of cycle 18 (TICKET-077) — one builder per bounded pass.**
 
 ## Scope (this pass ONLY)
@@ -21,3 +21,6 @@ as a THIN INSTRUCTION EMITTER over `revolver.derive`:
 ## Out of scope (later passes)
 - `build_client_timeout_fix` (TICKET-080) and `build_outer_freshness_fix` (TICKET-081).
 - Do NOT touch the grep replay tests (that is TICKET-078, a separate row).
+
+## Resolution
+Merged cycle 19, PR #94 (commit c7bf0ec).
