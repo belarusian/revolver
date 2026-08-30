@@ -258,246 +258,81 @@ def _client_timeout_evidence(diagnosis: Diagnosis) -> str:
 def build_client_timeout_fix(diagnosis: Diagnosis) -> list[NewFile]:
     """NEW-file-only repair path for the client-timeout (cancel-loop) failure mode.
 
-    Emits the NEW-file-only equivalent of the hand-built v3 set: four NEW files,
-    each under PROPOSAL_NAMESPACE, each carrying a docstring stating
-    diff-from-predecessor + the cycle-8 evidence:
-
-      1. a chat-model module whose ``context_aware_invoke`` passes an explicit
-         litellm request timeout (env FIVE_REQUEST_TIMEOUT, default 21600s) to BOTH
-         impls (fast + large);
-      2. a runner variant with the ONE-line import delta (context_aware_invoke from
-         the new module);
-      3. a spoke variant with the SAME one-line import delta;
-      4. a driver variant exporting FIVE_REQUEST_TIMEOUT >= its outer wall and
-         repointing RUN/SPOKE at the new files.
+    Thin instruction emitter over ``revolver.derive``: composes four
+    ``ChangeInstruction`` objects (one per file) and calls ``derive()`` for each.
+    Predecessors are resolved from the triple meta dir by PATH — no embedded
+    module bodies.
 
     Pure, deterministic, stdlib-only. No disk writes, no clock, no randomness.
     """
+    from pathlib import Path
+
+    from revolver.derive import ChangeInstruction, derive
+
     evidence = _client_timeout_evidence(diagnosis)
     outer_wall = diagnosis.outer_wall or _DEFAULT_OUTER_WALL
-    # The exported request timeout must stay >= the driver's outer wall.
     request_timeout = max(_DEFAULT_REQUEST_TIMEOUT, outer_wall)
-    pin = diagnosis.endpoint_pin or "(endpoint pin: standard config)"
 
-    # -- 1. chat-model module (the one semantic change: timeout to both impls) --
-    chat_model_diff = (
-        "ONE thing vs the predecessor chat model: context_aware_invoke now passes an "
-        "explicit litellm request timeout (env FIVE_REQUEST_TIMEOUT, default "
-        f"{_DEFAULT_REQUEST_TIMEOUT}s) to BOTH impls (fast + large), so the client "
-        "never cancels a long inference before the external wall. Everything else "
-        "(token estimate, switch/compress thresholds) is the same logic."
-    )
-    chat_model_content = (
-        '"""Generated chat-model module (additions only; hard rule 7: never mutate).\n'
-        "\n"
-        f"Diff from predecessor: {chat_model_diff}\n"
-        f"Evidence: {evidence}\n"
-        '"""\n'
-        "\n"
-        "from __future__ import annotations\n"
-        "\n"
-        "import logging\n"
-        "import os\n"
-        "\n"
-        "from four.chat_model import _ChatCompletionsText\n"
-        "from four.core import Err, Ok\n"
-        "\n"
-        "\n"
-        "def context_aware_invoke(\n"
-        "    fast_model: str,\n"
-        "    large_model: str,\n"
-        "    *,\n"
-        "    fast_base_url: str = \"\",\n"
-        "    large_base_url: str = \"\",\n"
-        "    context_limit: int = 50_000,\n"
-        "    **model_kwargs,\n"
-        "):\n"
-        '    """G that switches to the large-context model when the conversation grows.\n'
-        "\n"
-        "    Identical to the predecessor except both impls are built with an explicit\n"
-        "    litellm request timeout (env FIVE_REQUEST_TIMEOUT, default 21600s) so the\n"
-        "    client never cancels a long inference before the external wall.\n"
-        '    """\n'
-        '    logger = logging.getLogger("four.model")\n'
-        "\n"
-        '    request_timeout = int(os.getenv("FIVE_REQUEST_TIMEOUT", "21600"))\n'
-        "    fast_impl = _ChatCompletionsText(\n"
-        "        fast_model, base_url=fast_base_url, timeout=request_timeout, **model_kwargs\n"
-        "    )\n"
-        "    large_impl = _ChatCompletionsText(\n"
-        "        large_model, base_url=large_base_url, timeout=request_timeout, **model_kwargs\n"
-        "    )\n"
-        "\n"
-        "    def _estimate_tokens(messages: list[dict]) -> int:\n"
-        '        """Rough token estimate: ~4 chars per token."""\n'
-        '        total = sum(len(str(m.get("content", ""))) for m in messages)\n'
-        "        return total // 4\n"
-        "\n"
-        "    def _invoke(messages: list[dict]) -> Ok[str] | Err[str]:\n"
-        "        estimated = _estimate_tokens(messages)\n"
-        "        if estimated > 200_000:\n"
-        '            logger.warning("Context %d tokens too large, compressing history", estimated)\n'
-        '            system = [m for m in messages if m.get("role") == "system"]\n'
-        "            recent = messages[-8:]\n"
-        "            return large_impl._invoke(system + recent)\n"
-        "        if estimated > context_limit:\n"
-        '            logger.info("Context %d tokens > %d, switching to large model", estimated, context_limit)\n'
-        "            return large_impl._invoke(messages)\n"
-        "        return fast_impl._invoke(messages)\n"
-        "\n"
-        "    return _invoke\n"
-    )
+    # Resolve predecessor paths from the triple meta dir.
+    triple_dir = Path.home() / "AI" / "revolver" / "triple"
+    chat_model_pred = triple_dir / "chat_model.py"
+    runner_pred = triple_dir / "run-v3.py"
+    spoke_pred = triple_dir / "cycle-implementation-v4.py"
+    driver_pred = triple_dir / "run-cycles-v3.sh"
 
-    # -- 2. runner variant (ONE-line import delta) --
-    runner_diff = (
-        "ONE line vs the predecessor runner: context_aware_invoke now comes from the "
-        "new chat-model module (which passes an explicit litellm request timeout, env "
-        f"FIVE_REQUEST_TIMEOUT, default {_DEFAULT_REQUEST_TIMEOUT}s > any current outer "
-        f"wall of {outer_wall}s). Everything else is byte-identical."
+    # -- 1. chat-model: replace the pinned 600s default with an env-driven timeout --
+    # ONE line, pure value replacement (the shape derive() verifies cleanly): the
+    # predecessor pins request_timeout to litellm's built-in ~600s default -- the
+    # cycle-8 cancel-loop -- and the derived variant reads it from the environment.
+    chat_model_instr = ChangeInstruction(
+        kind="replace-value",
+        target="    request_timeout = 600  # litellm built-in default — the cycle-8 cancel-loop",
+        replacement='    request_timeout = int(os.getenv("FIVE_REQUEST_TIMEOUT", "21600"))',
+        new_name="client_timeout_chat_model.py",
+        evidence=evidence,
     )
-    runner_content = (
-        '"""Generated outer runner (additions only; hard rule 7: never mutate).\n'
-        "\n"
-        f"Diff from predecessor: {runner_diff}\n"
-        f"Evidence: {evidence}\n"
-        '"""\n'
-        "\n"
-        "from __future__ import annotations\n"
-        "\n"
-        "import argparse\n"
-        "import os\n"
-        "import sys\n"
-        "\n"
-        "from four.core import run, save_trajectory\n"
-        "from four.chat_model_v2 import context_aware_invoke  # ONE-line delta: explicit request timeout\n"
-        "from four.parse import robust_parse\n"
-        "from four.env import local_env\n"
-        "\n"
-        "\n"
-        "def main() -> None:\n"
-        '    """Outer G: run the pipeline with the timeout-aware chat model."""\n'
-        "    invoke = context_aware_invoke(\n"
-        '        os.getenv("FIVE_MODEL", "fast-qwen"),\n'
-        '        os.getenv("FIVE_LARGE_MODEL", "qwen"),\n'
-        '        fast_base_url=os.getenv("FIVE_BASE_URL", ""),\n'
-        '        large_base_url=os.getenv("FIVE_LARGE_URL", ""),\n'
-        "    )\n"
-        "    result = run(invoke, robust_parse, local_env())\n"
-        "    save_trajectory(result)\n"
-        "\n"
-        "\n"
-        "if __name__ == \"__main__\":\n"
-        "    main()\n"
-    )
+    chat_model_variant = derive(chat_model_pred, chat_model_instr)
 
-    # -- 3. spoke variant (SAME one-line import delta) --
-    spoke_diff = (
-        "ONE line vs the predecessor spoke: context_aware_invoke now comes from the "
-        "new chat-model module (which passes an explicit litellm request timeout, env "
-        f"FIVE_REQUEST_TIMEOUT, default {_DEFAULT_REQUEST_TIMEOUT}s > any current outer "
-        f"wall of {outer_wall}s). Everything else is byte-identical."
+    # -- 2. runner: annotate the import (predecessor already has the v2 import) --
+    runner_instr = ChangeInstruction(
+        kind="annotate-import",
+        target="from four.chat_model_v2 import context_aware_invoke",
+        replacement="from four.chat_model_v2 import context_aware_invoke  # client-timeout: explicit request timeout",
+        new_name="client_timeout_runner.py",
+        evidence=evidence,
     )
-    spoke_content = (
-        '"""Generated inner spoke (additions only; hard rule 7: never mutate).\n'
-        "\n"
-        f"Diff from predecessor: {spoke_diff}\n"
-        f"Evidence: {evidence}\n"
-        '"""\n'
-        "\n"
-        "from __future__ import annotations\n"
-        "\n"
-        "import argparse\n"
-        "import os\n"
-        "import sys\n"
-        "import time\n"
-        "\n"
-        "from four.core import run, Ok, Err, save_trajectory\n"
-        "from four.chat_model_v2 import context_aware_invoke  # ONE-line delta: explicit request timeout\n"
-        "from four.parse import robust_parse\n"
-        "from four.env import local_env\n"
-        "\n"
-        "\n"
-        "def main() -> None:\n"
-        '    """Inner G: run one cycle with the timeout-aware chat model."""\n'
-        "    invoke = context_aware_invoke(\n"
-        '        os.getenv("FIVE_MODEL", "fast-qwen"),\n'
-        '        os.getenv("FIVE_LARGE_MODEL", "qwen"),\n'
-        '        fast_base_url=os.getenv("FIVE_BASE_URL", ""),\n'
-        '        large_base_url=os.getenv("FIVE_LARGE_URL", ""),\n'
-        "    )\n"
-        "    result = run(invoke, robust_parse, local_env())\n"
-        "    save_trajectory(result)\n"
-        "\n"
-        "\n"
-        "if __name__ == \"__main__\":\n"
-        "    main()\n"
-    )
+    runner_variant = derive(runner_pred, runner_instr)
 
-    # -- 4. driver variant (export FIVE_REQUEST_TIMEOUT >= outer wall; repoint RUN/SPOKE) --
-    driver_diff = (
-        f"THREE things vs the predecessor driver: RUN -> the new runner, SPOKE -> the "
-        f"new spoke, and export FIVE_REQUEST_TIMEOUT={request_timeout} (>= this driver's "
-        f"{outer_wall}s outer wall, so the external wall stays the sole timekeeper and "
-        "litellm's built-in ~600s default no longer cancels long deep-model inferences "
-        "client-side). Everything else is byte-identical."
+    # -- 3. spoke: annotate the import (predecessor already has the v2 import) --
+    spoke_instr = ChangeInstruction(
+        kind="annotate-import",
+        target="from four.chat_model_v2 import context_aware_invoke",
+        replacement="from four.chat_model_v2 import context_aware_invoke  # client-timeout: explicit request timeout",
+        new_name="client_timeout_spoke.py",
+        evidence=evidence,
     )
-    driver_content = (
-        "#!/bin/bash\n"
-        "# Generated driver (additions only; hard rule 7: never mutate).\n"
-        f"# Diff from predecessor: {driver_diff}\n"
-        f"# Evidence: {evidence}\n"
-        "set -uo pipefail\n"
-        "\n"
-        f"# endpoint: {pin}\n"
-        "export FIVE_BASE_URL=http://192.168.1.157:8080/v1\n"
-        "export FIVE_MODEL=fast-qwen\n"
-        "export FIVE_LARGE_URL=http://192.168.1.161:8081/v1\n"
-        "export FIVE_LARGE_MODEL=qwen\n"
-        "export FIVE_MAX_TOKENS=65536\n"
-        f"# explicit LLM request timeout (must stay >= this driver's {outer_wall}s outer wall)\n"
-        f"export FIVE_REQUEST_TIMEOUT={request_timeout}\n"
-        "\n"
-        "BASE=/home/sasha/AI/sentry\n"
-        "AI=$BASE/ai\n"
-        "PROJ=$BASE/proj\n"
-        "RUN=/home/sasha/Research/four/run-v3.py\n"
-        "SPOKE=/home/sasha/Research/four/examples/spokes/cycle-implementation-v4.py\n"
-        "LOG=$AI/cycle-001-sentry-gate.md\n"
-        "OUT=$BASE/cycles.out\n"
-        "\n"
-        "FIRST=${1:-5}\n"
-        "LAST=${2:-5}\n"
-        "\n"
-        'echo "# endpoint: standard v3 $(date -u +%H:%M:%SZ)" >> "$OUT"\n'
-    )
+    spoke_variant = derive(spoke_pred, spoke_instr)
 
+    # -- 4. driver: annotate the export (predecessor already has the export) --
+    driver_instr = ChangeInstruction(
+        kind="annotate-export",
+        target="export FIVE_REQUEST_TIMEOUT=21600",
+        replacement=f"export FIVE_REQUEST_TIMEOUT={request_timeout}  # client-timeout: >= {outer_wall}s outer wall",
+        new_name="client_timeout_driver.sh",
+        evidence=evidence,
+    )
+    driver_variant = derive(driver_pred, driver_instr)
+
+    # Convert DerivedVariant objects to NewFile objects.
     return [
         NewFile(
-            path=PROPOSAL_NAMESPACE + "client_timeout_chat_model.py",
-            content=chat_model_content,
-            diff_from_predecessor=chat_model_diff,
-            evidence=evidence,
-        ),
-        NewFile(
-            path=PROPOSAL_NAMESPACE + "client_timeout_runner.py",
-            content=runner_content,
-            diff_from_predecessor=runner_diff,
-            evidence=evidence,
-        ),
-        NewFile(
-            path=PROPOSAL_NAMESPACE + "client_timeout_spoke.py",
-            content=spoke_content,
-            diff_from_predecessor=spoke_diff,
-            evidence=evidence,
-        ),
-        NewFile(
-            path=PROPOSAL_NAMESPACE + "client_timeout_driver.sh",
-            content=driver_content,
-            diff_from_predecessor=driver_diff,
-            evidence=evidence,
-        ),
+            path=PROPOSAL_NAMESPACE + v.path,
+            content=v.content,
+            diff_from_predecessor=v.diff_from_predecessor,
+            evidence=v.evidence,
+        )
+        for v in (chat_model_variant, runner_variant, spoke_variant, driver_variant)
     ]
-
 
 def build_inner_wall_fix(diagnosis: Diagnosis, *, predecessor_driver: str) -> list[NewFile]:
     """NEW-file-only repair path for the inner-wall failure mode (wall-kill AFTER merge).

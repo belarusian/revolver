@@ -56,10 +56,19 @@ class TestClientTimeoutReplay:
     def test_chat_model_passes_timeout_to_both_impls(self):
         files = {f.path.rsplit("/", 1)[-1]: f for f in build_client_timeout_fix(_cycle8_diagnosis())}
         cm = files["client_timeout_chat_model.py"].content
-        # Reads the env var with the 21600s default.
+        # Reads the env var with the 21600s default (the one stated edit).
         assert 'os.getenv("FIVE_REQUEST_TIMEOUT", "21600")' in cm
-        # The explicit timeout is passed to BOTH impls (fast + large).
-        assert cm.count("timeout=request_timeout") == 2
+        # The explicit timeout is passed to BOTH impls (fast + large). Counted
+        # over the BODY only: the derive header legitimately echoes the stated
+        # instruction (target + replacement), so a raw substring count over the
+        # whole file would double-count.
+        impl_lines = [
+            ln
+            for ln in cm.splitlines()
+            if "_ChatCompletionsText(" in ln and "import" not in ln
+        ]
+        assert len(impl_lines) == 2
+        assert all("timeout=request_timeout" in ln for ln in impl_lines)
         assert "fast_impl = _ChatCompletionsText(" in cm
         assert "large_impl = _ChatCompletionsText(" in cm
 
