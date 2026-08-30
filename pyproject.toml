@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "revolver"
-version = "0.1.0"
+version = "0.2.0"
 description = "Deterministic, stdlib-only repair-path generator for sentry diagnoses."
 requires-python = ">=3.10"
 dependencies = []
@@ -15,7 +15,7 @@ sentry = ["sentry @ git+https://github.com/belarusian/sentry.git@9713735c0b588e2
 [tool.setuptools]
 packages = ["revolver"]
 
-[tool.pytest]
+[tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [tool.ruff]

@@ -6,4 +6,4 @@ existing one) and carries a docstring stating its diff from the predecessor and
 the evidence motivating it.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
