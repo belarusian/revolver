@@ -4,15 +4,14 @@
 **Source: Cycle 28 synthesis audit — toolchain-pin verification**
 
 ## Evidence
-- `revolver/` contains 14 modules: `__init__.py`, `deploy.py`, `derive.py`,
+- `revolver/` contains 14 `.py` files: `__init__.py`, `deploy.py`, `derive.py`,
   `diagnosis.py`, `fixes.py`, `launch_plan.py`, `manifest.py`, `observe.py`,
   `proposal.py`, `relaunch.py`, `sentry_client.py`, `sentry_pin.py`,
-  `triple.py`, `validation.py`
-- README.md "Modules" table lists 12 rows (diagnosis, sentry_client, sentry_pin,
-  proposal, fixes, manifest, launch_plan, validation, deploy, relaunch, observe)
-  — wait, that's 11. Let me recount: diagnosis, sentry_client, sentry_pin,
-  proposal, fixes, manifest, launch_plan, validation, deploy, relaunch, observe
-  = 11 rows. Missing: `derive.py`, `triple.py`.
+  `triple.py`, `validation.py` (13 modules + `__init__.py`)
+- README.md "Modules" table has 11 rows (verified: `grep -c '^| `' README.md`
+  → 11). Listed: diagnosis, sentry_client, sentry_pin, proposal, fixes,
+  manifest, launch_plan, validation, deploy, relaunch, observe.
+- Missing from table: `derive.py`, `triple.py`.
 - `revolver/derive.py` docstring: "derive-by-reference: predecessor-in,
   versioned-variant-out. Evidence: Build Order row 'Derive-by-reference | 17-19'
   + TICKET-076."
