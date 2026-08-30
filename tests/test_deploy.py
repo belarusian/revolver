@@ -218,9 +218,7 @@ class TestDeployHardRule7:
         target = Path("/tmp/fake") / nf.path
 
         def fake_exists(self):
-            if self == target:
-                return True
-            return False
+            return self == target
 
         with patch.object(Path, "exists", fake_exists):
             report = deploy_manifest(m, base_dir="/tmp/fake", write_file=wf, approved=ap)
@@ -247,9 +245,7 @@ class TestDeployHardRule7:
         existing_target = Path("/tmp/fake") / files[0].path
 
         def fake_exists(self):
-            if self == existing_target:
-                return True
-            return False
+            return self == existing_target
 
         with patch.object(Path, "exists", fake_exists):
             report = deploy_manifest(m, base_dir="/tmp/fake", write_file=wf, approved=ap)
@@ -283,7 +279,7 @@ class TestRelaunchNoop:
         """Even if we force an empty command, it's a no-op."""
         m = _manifest_noop()
         rc = _fake_run_command()
-        report = relaunch(m, run_command=rc)
+        relaunch(m, run_command=rc)
         rc.assert_not_called()
 
 
