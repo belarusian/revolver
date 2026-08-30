@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from revolver.derive import ChangeInstruction, DerivedVariant, DerivationError, derive
+from revolver.derive import ChangeInstruction, DerivationError, DerivedVariant, derive
 
 # A 10-line stub runner predecessor (the tests never read the real triple).
 _STUB = (

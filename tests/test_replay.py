@@ -116,6 +116,16 @@ class TestClientTimeoutReplay:
             "        return 'ok'\n",
             encoding="utf-8",
         )
+        # Minimal core module providing Ok/Err (chat_model_v2 imports them).
+        (pkg_dir / "core.py").write_text(
+            "class Ok:\n"
+            "    def __init__(self, value=None):\n"
+            "        self.value = value\n"
+            "class Err:\n"
+            "    def __init__(self, value=None):\n"
+            "        self.value = value\n",
+            encoding="utf-8",
+        )
         (pkg_dir / "chat_model_v2.py").write_text(
             files["client_timeout_chat_model.py"].content, encoding="utf-8"
         )
@@ -136,13 +146,14 @@ class TestClientTimeoutReplay:
                 if "from four.chat_model_v2 import" in ln
             )
             ns: dict = {}
-            exec(import_line, ns)
+            exec(import_line, ns)  # noqa: S102 — executing the GENERATED artifact is the point
             assert "context_aware_invoke" in ns
         finally:
             sys.path.remove(str(tmp_path))
             # Clean up the imported module so it doesn't leak.
             sys.modules.pop("four.chat_model_v2", None)
             sys.modules.pop("four.chat_model", None)
+            sys.modules.pop("four.core", None)
             sys.modules.pop("four", None)
 
     def test_diff_isolation(self):
@@ -392,7 +403,7 @@ def _v3_read_newest(trajectories_dir: Path) -> str:
     import glob
     import json
 
-    p = sorted(glob.glob(str(trajectories_dir / "*.json")))[-1]
+    p = max(glob.glob(str(trajectories_dir / "*.json")))
     return json.load(open(p)).get("outcome", "?")
 
 
@@ -404,7 +415,9 @@ def _v4_guard_namespace() -> dict:
     }
     runner = files["outer_freshness_run_v4.py"].content
     ns: dict = {}
-    exec(compile(runner, "outer_freshness_run_v4.py", "exec"), ns)
+    exec(  # noqa: S102 — executing the GENERATED artifact is the point
+        compile(runner, "outer_freshness_run_v4.py", "exec"), ns
+    )
     return ns
 
 
@@ -445,7 +458,9 @@ class TestOuterFreshnessReplay:
         # Compile and exec into a namespace — if the code has syntax errors
         # or unresolvable imports at module level, this will raise.
         ns: dict = {}
-        exec(compile(runner, "outer_freshness_run_v4.py", "exec"), ns)
+        exec(  # noqa: S102 — executing the GENERATED artifact is the point
+            compile(runner, "outer_freshness_run_v4.py", "exec"), ns
+        )
         # The guard function must be present and callable.
         assert "pass_freshness_guard" in ns
         assert callable(ns["pass_freshness_guard"])

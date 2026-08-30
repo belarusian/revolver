@@ -292,20 +292,20 @@ class TestAllFailureModes:
 
 def _plan(**overrides) -> LaunchPlan:
     """A healthy, actionable LaunchPlan; override fields to break it."""
-    base = dict(
-        pipeline_id="revolver",
-        command=(
+    base = {
+        "pipeline_id": "revolver",
+        "command": (
             "nohup revolver launch --pipeline revolver --endpoint ep "
             "--failure-mode driver-death >> cycles.out 2>&1 &"
         ),
-        cycles_out_append="= LAUNCH revolver driver-death =\n",
-        endpoint_pin="ep",
-        request_timeout=90,
-        outer_wall=60,
-        one_pipeline_per_endpoint=True,
-        rationale="r",
-        version="1.0",
-    )
+        "cycles_out_append": "= LAUNCH revolver driver-death =\n",
+        "endpoint_pin": "ep",
+        "request_timeout": 90,
+        "outer_wall": 60,
+        "one_pipeline_per_endpoint": True,
+        "rationale": "r",
+        "version": "1.0",
+    }
     base.update(overrides)
     return LaunchPlan(**base)
 
