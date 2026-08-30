@@ -1,6 +1,6 @@
 # TICKET-085 — No docs/ directory; README is the sole documentation
 
-**Status: OPEN**
+**Status: DONE**
 **Source: Cycle 28 synthesis audit — toolchain-pin verification**
 
 ## Evidence
