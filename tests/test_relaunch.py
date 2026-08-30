@@ -4,8 +4,6 @@ verify_relaunch. All I/O and process probes go through injectable seams
 
 from __future__ import annotations
 
-import pytest
-
 from revolver.diagnosis import Diagnosis
 from revolver.manifest import build_manifest
 from revolver.relaunch import (
@@ -43,7 +41,7 @@ def _diagnosis(failure_mode: str, endpoint_pin: str = "ep-42") -> Diagnosis:
     return d
 
 
-def _manifest(failure_mode: str = "driver-death") -> "object":
+def _manifest(failure_mode: str = "driver-death") -> object:
     """Build a validated manifest for a given failure_mode."""
     return build_manifest(_diagnosis(failure_mode))
 

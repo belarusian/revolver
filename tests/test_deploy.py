@@ -7,8 +7,6 @@ import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from revolver.deploy import (
     DeployReport,
     LaunchReport,
@@ -16,10 +14,7 @@ from revolver.deploy import (
     relaunch,
 )
 from revolver.diagnosis import Diagnosis
-from revolver.launch_plan import LaunchPlan, build_launch_plan
 from revolver.manifest import ProposalManifest, build_manifest
-from revolver.proposal import NewFile, RepairProposal, propose
-
 
 # ---------------------------------------------------------------------------
 # Helpers
