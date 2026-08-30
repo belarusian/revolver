@@ -1,6 +1,6 @@
 # TICKET-068 — additive Diagnosis extension (client-timeout + inner-wall modes)
 
-**Status:** OPEN
+**Status:** DONE
 **Cycle:** 14 (Fix-class templates + replay acceptance, cycles 14-15)
 
 ## Capability

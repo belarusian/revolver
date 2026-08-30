@@ -32,6 +32,15 @@ if TYPE_CHECKING:
 _VALID_SOURCES = {"sentry-report", "raw-artifacts"}
 _VALID_VERDICTS = {"HEALTHY", "ACTION NEEDED"}
 _VALID_STALL_ACTIONS = {"none", "wait", "kill"}
+_VALID_FAILURE_MODES = {
+    "driver-death",
+    "wall-kill",
+    "stall-kill",
+    "none",
+    "inner-wall",
+    "client-timeout",
+    "outer-freshness",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +198,8 @@ class Diagnosis:
             raise ValueError(f"unknown verdict: {self.verdict!r}")
         if self.stall_action not in _VALID_STALL_ACTIONS:
             raise ValueError(f"unknown stall_action: {self.stall_action!r}")
+        if self.failure_mode not in _VALID_FAILURE_MODES:
+            raise ValueError(f"unknown failure_mode: {self.failure_mode!r}")
         return self
 
 
