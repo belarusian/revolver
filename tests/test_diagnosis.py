@@ -446,3 +446,37 @@ class TestOuterFreshnessFields:
         assert _derive_failure_mode(Diagnosis(wall_kill_cycle=5)) == "wall-kill"
         assert _derive_failure_mode(Diagnosis(stall_action="kill")) == "stall-kill"
         assert _derive_failure_mode(Diagnosis()) == "none"
+
+
+# ---------------------------------------------------------------------------
+# TICKET-068: additive failure_mode validation
+# ---------------------------------------------------------------------------
+
+
+class TestFailureModeValidation:
+    def test_validate_accepts_existing_modes(self):
+        for mode in ("driver-death", "wall-kill", "stall-kill", "none"):
+            d = Diagnosis(failure_mode=mode)
+            assert d.validate() is d
+
+    def test_validate_accepts_new_modes(self):
+        for mode in ("inner-wall", "client-timeout"):
+            d = Diagnosis(failure_mode=mode)
+            assert d.validate() is d
+
+    def test_validate_accepts_outer_freshness(self):
+        d = Diagnosis(failure_mode="outer-freshness")
+        assert d.validate() is d
+
+    def test_validate_rejects_unknown_failure_mode(self):
+        d = Diagnosis(failure_mode="catastrophe")
+        with pytest.raises(ValueError, match="unknown failure_mode"):
+            d.validate()
+
+    def test_new_modes_distinguishable_from_wall_kill(self):
+        # inner-wall and client-timeout are distinct tags from wall-kill and
+        # each validates independently (they are not collapsed into wall-kill).
+        assert Diagnosis(failure_mode="inner-wall").failure_mode != "wall-kill"
+        assert Diagnosis(failure_mode="client-timeout").failure_mode != "wall-kill"
+        for mode in ("inner-wall", "client-timeout", "wall-kill"):
+            assert Diagnosis(failure_mode=mode).validate() is not None
