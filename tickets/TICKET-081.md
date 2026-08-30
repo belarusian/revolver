@@ -1,6 +1,6 @@
 # TICKET-081 — Split of TICKET-077 (cycle 18, re-scoped): migrate build_outer_freshness_fix to derive
 
-**Status: Open**
+**Status: DONE**
 **Source: composer split of cycle 18 (TICKET-077) — one builder per bounded pass.**
 
 ## Scope (this pass ONLY)
@@ -21,3 +21,6 @@ Rewrite `build_outer_freshness_fix(diagnosis, *, predecessor_runner)` in
 
 ## Out of scope
 - Do NOT touch the grep replay tests (TICKET-078).
+
+## Resolution
+DONE — code merged in cycle 22 (PR #99, commit 0c4d91d; work commit 5be9696). Status flipped in cycle 24 close-out.
