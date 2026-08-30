@@ -552,92 +552,84 @@ def build_outer_freshness_fix(
 ) -> list[NewFile]:
     """NEW-file-only repair path for the outer-freshness (unwitnessed inner death) mode.
 
+    Thin instruction emitter over ``revolver.derive``: composes two
+    ``ChangeInstruction`` objects (one per file) and calls ``derive()`` for each.
+    Predecessors are resolved from the triple meta dir by PATH — no embedded
+    module bodies.
+
     Emits TWO NEW files, each under PROPOSAL_NAMESPACE, each carrying a docstring
     stating diff-from-predecessor + the cycle-16 evidence (trajectory_0027 /
     trajectory_0029, run-v3.py:84):
 
-      1. ``outer_freshness_run_v4.py`` - NEW run-v4.py content derived from the
-         run-v3.py predecessor text (passed READ-ONLY; never copied, never written
-         to ~/Research/four). Its step-2 trajectory read is pass-freshness-guarded:
-         the newest trajectory must be NEWER than the pass-start snapshot; no new
-         sequence => dead-unwitnessed => re-invoke or do the work yourself => the
-         stale newest file is NEVER evidence of completion.
-      2. ``outer_freshness_driver.sh`` - a driver-variant template reusing the
-         launch-plan budget machinery: RUN repointed at the generated run-v4
-         runner, endpoints verbatim, FIVE_REQUEST_TIMEOUT >= the outer wall.
+      1. ``outer_freshness_run_v4.py`` - the run-v3 runner with its step-2
+         trajectory read pass-freshness-guarded: the newest trajectory must be
+         NEWER than the pass-start snapshot; no new sequence => dead-unwitnessed
+         => re-invoke or do the work yourself => the stale newest file is NEVER
+         evidence of completion.
+      2. ``outer_freshness_driver.sh`` - the driver with RUN repointed at the
+         generated run-v4 runner (which carries the guard).
 
     Pure, deterministic, stdlib-only. No disk writes, no clock, no randomness.
     """
+    from pathlib import Path
+
+    from revolver.derive import ChangeInstruction, derive
+
+    # ``predecessor_runner`` is retained for signature compatibility; the
+    # predecessor is now resolved by PATH from the triple meta dir (artifacts
+    # carry references, never values).
+    _ = predecessor_runner
+
     evidence = _outer_freshness_evidence(diagnosis)
-    outer_wall = diagnosis.outer_wall or _DEFAULT_OUTER_WALL
-    # The exported request timeout must stay >= the driver's outer wall.
-    request_timeout = max(_DEFAULT_REQUEST_TIMEOUT, outer_wall)
-    pin = diagnosis.endpoint_pin or "(endpoint pin: standard config)"
-    base_seq = diagnosis.pass_start_max_seq
 
-    runner_content = _outer_freshness_runner_content(evidence)
-    runner_diff = (
-        "ONE thing vs the predecessor runner (run-v3.py): the step-2 trajectory read "
-        "is now pass-freshness-guarded - the newest trajectory must be NEWER than the "
-        "pass-start snapshot (pass_start_max_seq=" + str(base_seq) + "); no new "
-        "sequence => dead-unwitnessed => re-invoke the inner or do the work yourself "
-        "=> the stale newest file is NEVER evidence of completion. Everything else "
-        "(invoke inner first, reconcile the log, keep passing until genuinely done) "
-        "is the same logic."
+    # Resolve predecessor paths from the triple meta dir (references, not values).
+    triple_dir = Path.home() / "AI" / "revolver" / "triple"
+    runner_pred = triple_dir / "outer_freshness_run_v3.py"
+    driver_pred = triple_dir / "outer_freshness_driver_v3.sh"
+
+    # -- 1. runner: guard the step-2 trajectory read (the ONE semantic edit) --
+    # The predecessor's step-2 read is unguarded (before-state); the derived
+    # variant branches on the pass-freshness guard so a stale newest file is
+    # never accepted as completion.
+    runner_instr = ChangeInstruction(
+        kind="guard-step2-read",
+        target="    newest = read_newest_trajectory(str(trajectories))  # step-2: unguarded (before-state)",
+        replacement=(
+            "    if not pass_freshness_guard(str(trajectories), pass_start_max_seq):\n"
+            "        # No trajectory NEWER than the pass-start snapshot: the inner pass died\n"
+            "        # unwitnessed (rc=124, EMPTY output). The stale newest file is NEVER\n"
+            "        # evidence of completion. Re-invoke the inner OR do the work yourself.\n"
+            "        print(\n"
+            '            "DEAD-UNWITNESSED: no new trajectory this pass; re-invoke or do the "\n'
+            '            "work yourself (never accept the stale newest file as completion)"\n'
+            "        )\n"
+            "        sys.exit(124)\n"
+            "    newest = read_newest_trajectory(str(trajectories))"
+        ),
+        new_name="outer_freshness_run_v4.py",
+        evidence=evidence,
     )
+    runner_variant = derive(runner_pred, runner_instr)
 
-    driver_diff = (
-        "THREE things vs the predecessor driver: RUN -> the generated run-v4 runner "
-        "(" + _OUTER_FRESHNESS_RUNNER_PATH + "), which carries the pass-freshness "
-        "guard on the step-2 trajectory read; export FIVE_REQUEST_TIMEOUT=" + str(request_timeout) + " "
-        "(>= this driver's " + str(outer_wall) + "s outer wall, so the external wall "
-        "stays the sole timekeeper); and the endpoint pins are carried verbatim. "
-        "Everything else is byte-identical."
+    # -- 2. driver: repoint RUN at the generated run-v4 runner --
+    driver_instr = ChangeInstruction(
+        kind="repoint-run",
+        target="RUN=/home/sasha/AI/revolver/triple/run-v3.py",
+        replacement="RUN=" + _OUTER_FRESHNESS_RUNNER_PATH,
+        new_name="outer_freshness_driver.sh",
+        evidence=evidence,
     )
+    driver_variant = derive(driver_pred, driver_instr)
 
-    driver_content = (
-        "#!/bin/bash\n"
-        "# Generated driver (additions only; hard rule 7: never mutate).\n"
-        "# Diff from predecessor: " + driver_diff + "\n"
-        "# Evidence: " + evidence + "\n"
-        "set -uo pipefail\n"
-        "\n"
-        "# endpoint: " + pin + "\n"
-        "export FIVE_BASE_URL=http://192.168.1.157:8080/v1\n"
-        "export FIVE_MODEL=fast-qwen\n"
-        "export FIVE_LARGE_URL=http://192.168.1.161:8081/v1\n"
-        "export FIVE_LARGE_MODEL=qwen\n"
-        "export FIVE_MAX_TOKENS=65536\n"
-        "# explicit LLM request timeout (must stay >= this driver's " + str(outer_wall) + "s outer wall)\n"
-        "export FIVE_REQUEST_TIMEOUT=" + str(request_timeout) + "\n"
-        "\n"
-        "BASE=/home/sasha/AI/sentry\n"
-        "AI=$BASE/ai\n"
-        "PROJ=$BASE/proj\n"
-        "RUN=" + _OUTER_FRESHNESS_RUNNER_PATH + "\n"
-        "SPOKE=/home/sasha/Research/four/examples/spokes/cycle-implementation-v4.py\n"
-        "LOG=$AI/cycle-001-sentry-gate.md\n"
-        "OUT=$BASE/cycles.out\n"
-        "\n"
-        "FIRST=${1:-5}\n"
-        "LAST=${2:-5}\n"
-        "\n"
-        'echo "# endpoint: standard v4 $(date -u +%H:%M:%SZ)" >> "$OUT"\n'
-    )
-
+    # Convert DerivedVariant objects to NewFile objects.
     return [
         NewFile(
-            path=_OUTER_FRESHNESS_RUNNER_PATH,
-            content=runner_content,
-            diff_from_predecessor=runner_diff,
-            evidence=evidence,
-        ),
-        NewFile(
-            path=_OUTER_FRESHNESS_DRIVER_PATH,
-            content=driver_content,
-            diff_from_predecessor=driver_diff,
-            evidence=evidence,
-        ),
+            path=PROPOSAL_NAMESPACE + v.path,
+            content=v.content,
+            diff_from_predecessor=v.diff_from_predecessor,
+            evidence=v.evidence,
+        )
+        for v in (runner_variant, driver_variant)
     ]
 
 
