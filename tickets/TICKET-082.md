@@ -1,6 +1,8 @@
 # TICKET-082 — Package version 0.1.0 does not match tag v0.2.0
 
-**Status: OPEN**
+**Status: DONE**
+
+> Cycle 29: bumped pyproject.toml + revolver/__init__.py + README to 0.2.0. No new tag (v0.2.0 already on main).
 **Source: Cycle 28 synthesis audit — toolchain-pin verification**
 
 ## Evidence

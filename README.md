@@ -83,6 +83,8 @@ One row per module in `revolver/`, mirroring each module's docstring.
 | `deploy.py` | Deployment + relaunch execution for a validated `ProposalManifest`. `deploy_manifest` writes the NEW files (additions-only, hard rule 7) on human approval; `relaunch` executes the launch-plan command. Both gated behind overridable seams. No process kill. |
 | `relaunch.py` | Deterministic relaunch planning + verification: `first_not_done_cycle` (the resume point), `plan_relaunch` (a resume-aware command scoped to the first not-done cycle), and `verify_relaunch` (marker in cycles.out + driver alive). No process kill. |
 | `observe.py` | The read-only observer half of the loop. Parses `cycles.out` into per-cycle markers (file order, never reordered/deduped), the per-cycle trajectory outcomes, and the git merge commits; reports done / in-flight / gaps honestly and composes them into a recurrence verdict (`report`) and a final report (`render_final_report` / `render`). Read-only: no launch, no kill, no write. |
+| `derive.py` | Derive-by-reference: predecessor-in, versioned-variant-out. The core of the derive-by-reference procedure that replaces value-embedding generators: read a predecessor READ-ONLY, apply EXACTLY ONE stated minimal edit, and emit a NEW versioned file whose docstring names the predecessor by PATH (the version chain). Verification is by construction and fails loud: the output must compile and differ from the predecessor by exactly the stated lines; any extra delta is a `DerivationError`. Pure, stdlib-only, overridable I/O seams. |
+| `triple.py` | The pinned derivation baseline, carried by REFERENCE only. Encodes the law that artifacts carry REFERENCES (paths + checksums), never VALUES: the three seed elements of the golden v3 set are pinned by sha256 against the Sunny execution plane and physically held in the META dir (outside the artifact repo). Contains NO file bodies or embedded content — only the meta-dir path, the pinned checksums, and verify/resolve functions that read the files at resolve time and fail loud on any checksum mismatch. |
 
 ## Design invariants
 
@@ -116,6 +118,6 @@ pipeline actually hit and that the fix builders must repair:
 
 ## Version
 
-`0.1.0` - the 12-cycle build (diagnosis intake, additive proposal, proposal
+`0.2.0` - the Build Order build (cycles 1-24: diagnosis intake, additive proposal, proposal
 validation, deploy + relaunch, observe + report) is complete. See the gate log
 (`ai/cycle-001-revolver-gate.md`) for the per-cycle record.

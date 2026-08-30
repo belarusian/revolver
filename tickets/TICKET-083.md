@@ -1,6 +1,8 @@
 # TICKET-083 — README module table missing derive.py and triple.py
 
-**Status: OPEN**
+**Status: DONE**
+
+> Cycle 29: added derive.py + triple.py rows; module table now 13 rows (matches 13 modules).
 **Source: Cycle 28 synthesis audit — toolchain-pin verification**
 
 ## Evidence
