@@ -1,6 +1,6 @@
 # TICKET-098: `docs/API.md` `revolver.fixes` section is stale (signatures + registry note)
 
-Status: OPEN
+Status: DONE
 Cycle: 37 (synthesis audit)
 
 ## Purpose
@@ -48,3 +48,11 @@ Update `docs/API.md:149-156`:
   `predecessor_runner`, called directly); `build_inner_wall_fix` IS registered
   (`"inner-wall"`) and reachable via `propose()`.
 Docs-only change; no test impact.
+
+## Resolution (Cycle 38)
+Updated `docs/API.md` revolver.fixes section: `build_client_timeout_fix` now shows the
+`triple_dir: str | Path | None = None` seam; `build_inner_wall_fix` now shows
+`predecessor_driver: str | None = None`; registry note corrected to state that only
+`build_outer_freshness_fix` is absent from `FIX_BUILDERS` while `build_inner_wall_fix`
+is registered (`"inner-wall"`) and reachable via `propose()`. Docs-only change; no test
+impact.

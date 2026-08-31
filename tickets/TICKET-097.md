@@ -1,6 +1,6 @@
 # TICKET-097: Dead constant `_OUTER_FRESHNESS_DRIVER_PATH` in `revolver/fixes.py`
 
-Status: OPEN
+Status: DONE
 Cycle: 37 (synthesis audit)
 
 ## Purpose
@@ -33,3 +33,9 @@ Delete `revolver/fixes.py:457` (and its comment line :456). Keep
 `_OUTER_FRESHNESS_RUNNER_PATH` (:455) — it is read at :650. Re-run
 `ruff check revolver/` and `pytest tests/test_replay.py -q` (outer-freshness replay
 tests are unaffected).
+
+## Resolution (Cycle 38)
+Deleted the dead constant `_OUTER_FRESHNESS_DRIVER_PATH` and its comment line from
+`revolver/fixes.py`. Kept `_OUTER_FRESHNESS_RUNNER_PATH` (read at the `RUN=` replacement
+site). No behavior change. Verified: `grep -rn --include='*.py' _OUTER_FRESHNESS_DRIVER_PATH
+revolver/ tests/ docs/` returns nothing.
