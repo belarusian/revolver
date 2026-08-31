@@ -22,9 +22,10 @@ These tests assert the STRUCTURAL CONTRACT, not golden-reference equivalence:
   * both builders are pure + deterministic (same input -> identical output across two
     calls — TICKET-088);
   * client-timeout is registered in ``FIX_BUILDERS`` and reachable via ``propose()``;
-    inner-wall is called directly with a keyword-only ``predecessor_driver`` and is
-    intentionally NOT in the single-arg ``FIX_BUILDERS`` registry (TICKET-087 — the
-    documented fact is asserted, not changed).
+    inner-wall is ALSO registered in ``FIX_BUILDERS`` and reachable via ``propose()``
+    (TICKET-087 — ``predecessor_driver`` is now optional and falls back to
+    ``diagnosis.inner_wall_driver_path``; it still accepts the keyword-only form and
+    fails loud with ``ValueError`` when no predecessor path is available).
 
 Client-timeout tests that read the real triple dir are guarded with ``@requires_triple``
 (like ``test_replay.py``). Inner-wall tests write a temp predecessor driver file (like
@@ -380,11 +381,12 @@ class TestInnerWallContract:
         second = build_inner_wall_fix(d, predecessor_driver=pred)
         assert [f.to_dict() for f in first] == [f.to_dict() for f in second]
 
-    def test_not_in_fix_builders_registry(self):
-        """TICKET-087 (documented fact, do not change): the inner-wall builder takes a
-        keyword-only predecessor_driver, so it is intentionally NOT in the single-arg
-        FIX_BUILDERS registry; it is called directly with the predecessor text."""
-        assert "inner-wall" not in FIX_BUILDERS
+    def test_registered_in_fix_builders(self):
+        """TICKET-087 (resolved): the inner-wall builder is now registered in the
+        single-arg FIX_BUILDERS registry (predecessor_driver is optional and falls
+        back to diagnosis.inner_wall_driver_path), so propose() can reach it."""
+        assert "inner-wall" in FIX_BUILDERS
+        assert FIX_BUILDERS["inner-wall"] is build_inner_wall_fix
 
     def test_called_directly_with_keyword_only_predecessor_driver(self, tmp_path: Path):
         """predecessor_driver is keyword-only: passing it positionally must fail."""
@@ -395,6 +397,32 @@ class TestInnerWallContract:
         # And the keyword form works.
         files = build_inner_wall_fix(d, predecessor_driver=pred)
         assert len(files) == 1
+
+    def test_reachable_via_propose(self, tmp_path: Path):
+        """TICKET-087: propose() reaches the inner-wall builder via FIX_BUILDERS and
+        produces the inner-wall NewFile (no @requires_triple)."""
+        pred = _write_predecessor(tmp_path)
+        d = Diagnosis(
+            failure_mode="inner-wall",
+            inner_wall_kill_cycle=11,
+            heaviest_inner_duration=2400,
+            inner_wall_driver_path=pred,
+            source="sentry-report",
+            evidence="cycle 11 wall-kill after merge",
+        )
+        proposal = propose(d)
+        assert len(proposal.new_files) == 1
+        f = proposal.new_files[0]
+        assert f.path.startswith(PROPOSAL_NAMESPACE)
+        # heaviest (2400) + margin (1800) = 4200.
+        assert f"--inner-seconds {2400 + _INNER_WALL_MARGIN}" in f.content
+
+    def test_raises_value_error_when_no_predecessor_path(self):
+        """TICKET-087: with no predecessor_driver= AND no diagnosis.inner_wall_driver_path,
+        the builder fails loud (ValueError) rather than emitting a wrong file."""
+        d = _cycle11_diagnosis()  # inner_wall_driver_path is None
+        with pytest.raises(ValueError):
+            build_inner_wall_fix(d)
 
 
 class TestClientTimeoutTripleDirSeam:

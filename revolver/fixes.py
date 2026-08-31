@@ -345,7 +345,11 @@ def build_client_timeout_fix(
         for v in (chat_model_variant, runner_variant, spoke_variant, driver_variant)
     ]
 
-def build_inner_wall_fix(diagnosis: Diagnosis, *, predecessor_driver: str) -> list[NewFile]:
+def build_inner_wall_fix(
+    diagnosis: Diagnosis,
+    *,
+    predecessor_driver: str | None = None,
+) -> list[NewFile]:
     """NEW-file-only repair path for the inner-wall failure mode (wall-kill AFTER merge).
 
     Emits ONE new file — a driver variant whose ONLY delta is a larger
@@ -361,10 +365,27 @@ def build_inner_wall_fix(diagnosis: Diagnosis, *, predecessor_driver: str) -> li
 
     Pure, deterministic, stdlib-only. No disk writes, no clock, no randomness.
     The predecessor is referenced by PATH (never embedded as text).
+
+    Predecessor resolution (TICKET-087): ``predecessor_driver`` is the PATH to the
+    predecessor driver file. When it is omitted (``None``), the builder falls back
+    to ``diagnosis.inner_wall_driver_path``; if that is also ``None`` it raises
+    ``ValueError`` (no predecessor path available). Passing ``predecessor_driver``
+    explicitly always wins and keeps the prior behavior byte-identical.
     """
     from pathlib import Path
 
     from revolver.derive import ChangeInstruction, derive
+
+    # Resolve the predecessor driver PATH (TICKET-087): an explicit
+    # predecessor_driver= always wins; otherwise fall back to the diagnosis
+    # field; otherwise fail loud.
+    if predecessor_driver is None:
+        predecessor_driver = diagnosis.inner_wall_driver_path
+    if predecessor_driver is None:
+        raise ValueError(
+            "build_inner_wall_fix: no predecessor driver path available "
+            "(pass predecessor_driver= or set diagnosis.inner_wall_driver_path)"
+        )
 
     cycle = diagnosis.inner_wall_kill_cycle
     evidence = (
@@ -645,13 +666,16 @@ def build_outer_freshness_fix(
 
 
 # Registry keyed by failure_mode; unknown modes fall back to the none-builder.
-# (The inner-wall builder takes a keyword-only predecessor_driver, and the
-# outer-freshness builder takes a keyword-only predecessor_runner, so NEITHER is
-# in this single-arg registry; each is called directly with the predecessor text.)
+# (The inner-wall builder is registered: its predecessor_driver is now optional
+# and falls back to diagnosis.inner_wall_driver_path, so it is callable with a
+# single argument via propose(). The outer-freshness builder still takes a
+# keyword-only predecessor_runner and is NOT in this single-arg registry; it is
+# called directly with the predecessor text.)
 FIX_BUILDERS: dict[str, Callable[[Diagnosis], list[NewFile]]] = {
     "driver-death": build_driver_death_fix,
     "wall-kill": build_wall_kill_fix,
     "stall-kill": build_stall_kill_fix,
     "client-timeout": build_client_timeout_fix,
+    "inner-wall": build_inner_wall_fix,
     "none": build_none_fix,
 }
