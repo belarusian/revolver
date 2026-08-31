@@ -476,6 +476,7 @@ def build_outer_freshness_fix(
     diagnosis: Diagnosis,
     *,
     predecessor_runner: str,
+    triple_dir: str | Path | None = None,
 ) -> list[NewFile]:
     """NEW-file-only repair path for the outer-freshness (unwitnessed inner death) mode.
 
@@ -496,6 +497,15 @@ def build_outer_freshness_fix(
       2. ``outer_freshness_driver.sh`` - the driver with RUN repointed at the
          generated run-v4 runner (which carries the guard).
 
+    Args:
+        diagnosis: The failure diagnosis.
+        predecessor_runner: Retained for signature compatibility; the
+            predecessor is resolved by PATH from the triple meta dir.
+        triple_dir: Overridable seam for the triple meta directory. When
+            ``None`` (default) the canonical path
+            ``~/AI/revolver/triple`` is used. Supply a custom path to
+            point at a test fixture or alternate triple.
+
     Pure, deterministic, stdlib-only. No disk writes, no clock, no randomness.
     """
     from pathlib import Path
@@ -510,7 +520,7 @@ def build_outer_freshness_fix(
     evidence = _outer_freshness_evidence(diagnosis)
 
     # Resolve predecessor paths from the triple meta dir (references, not values).
-    triple_dir = Path.home() / "AI" / "revolver" / "triple"
+    triple_dir = Path(triple_dir) if triple_dir is not None else Path.home() / "AI" / "revolver" / "triple"
     runner_pred = triple_dir / "outer_freshness_run_v3.py"
     driver_pred = triple_dir / "outer_freshness_driver_v3.sh"
 
