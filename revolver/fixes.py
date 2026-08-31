@@ -354,10 +354,10 @@ def build_inner_wall_fix(
 
     Emits ONE new file — a driver variant whose ONLY delta is a larger
     --inner-seconds. This builder is a THIN INSTRUCTION EMITTER over
-    :func:: it composes a single :class:
+    ``revolver.derive``: it composes a single ``ChangeInstruction``
     (replace the --inner-seconds value) and hands the predecessor PATH to
-    derive(), which reads the file read-only, applies the edit, and verifies
-    by construction (compile + diff == stated lines).
+    ``derive()``, which reads the file read-only, applies the edit, and
+    verifies by construction (compile + diff == stated lines).
 
     The new inner-seconds value is derived from the observed heaviest inner duration
     when the diagnosis carries one (plus a stated margin), else a stated margin over
@@ -453,8 +453,6 @@ def build_inner_wall_fix(
 
 # The generated runner's path (under the proposal namespace; additions only).
 _OUTER_FRESHNESS_RUNNER_PATH = PROPOSAL_NAMESPACE + "outer_freshness_run_v4.py"
-# The generated driver's path (under the proposal namespace; additions only).
-_OUTER_FRESHNESS_DRIVER_PATH = PROPOSAL_NAMESPACE + "outer_freshness_driver.sh"
 
 
 def _outer_freshness_evidence(diagnosis: Diagnosis) -> str:

@@ -1,6 +1,6 @@
 # TICKET-096: Malformed Sphinx refs in `build_inner_wall_fix` docstring (`:func::` / `:class:`)
 
-Status: OPEN
+Status: DONE
 Cycle: 37 (synthesis audit)
 
 ## Purpose
@@ -43,3 +43,8 @@ Rewrite lines 356-360 to name the symbols explicitly, e.g.:
 
 No behavior change. Re-run `ruff check revolver/` (docstring-only edit) and
 `pytest tests/test_fixes_generators.py -q` (unchanged).
+
+## Resolution (Cycle 38)
+Replaced the broken `:func::` / `:class:` sentence in the `build_inner_wall_fix`
+docstring with the symbol-naming version (``revolver.derive`` / ``ChangeInstruction`` /
+``derive()``). No behavior change. Verified: `grep -n ":func::\|:class::\|:func:\|:class:" revolver/fixes.py` returns nothing.
