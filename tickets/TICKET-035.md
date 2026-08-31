@@ -1,6 +1,6 @@
 # TICKET-035: DeployReport + deploy_manifest (additions-only, on human approval)
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 8 synthesis audit
 Target: deploy the validated NEW path on human approval (revolver/deploy.py).
@@ -24,3 +24,5 @@ to `base_dir/<path>` (additions-only — never overwrite an existing path; hard 
 overridable seam (default: a human-approval callable that returns False). A not-approved
 manifest is reported ok with a "not approved" note and writes nothing. Pure logic; the
 only I/O is through the `write_file` seam.
+
+DONE — verified implemented in deploy.py (tests in test_deploy.py); closed out in Cycle 35.

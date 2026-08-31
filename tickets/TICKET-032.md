@@ -1,5 +1,7 @@
 # TICKET-032: build_launch_plan must emit a nohup + append command (so check_launch_plan passes)
 
+Status: DONE
+
 ## Title
 `build_launch_plan()` (revolver/launch_plan.py) currently emits an actionable command
 WITHOUT `nohup` and WITHOUT the `>> cycles.out` append redirect. Cycle 7's
@@ -18,3 +20,5 @@ Prefix the actionable command with `nohup` and append the `>> cycles.out 2>&1 &`
 redirect, e.g. `nohup revolver launch --pipeline ... --endpoint ... --failure-mode ...
 >> cycles.out 2>&1 &`. Keep it deterministic, stdlib-only, pure. The no-op (healthy)
 plan stays empty command/marker with zero budgets.
+
+DONE — verified implemented in validation.py (tests in test_validation.py); closed out in Cycle 35.

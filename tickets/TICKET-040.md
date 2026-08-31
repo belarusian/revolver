@@ -1,6 +1,6 @@
 # TICKET-040: first_not_done_cycle() — resume-point derivation (R1)
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 9 synthesis audit
 Target: `revolver/relaunch.py` (NEW module) — driver relaunch from the first not-done cycle.
@@ -41,3 +41,5 @@ relaunch plan (TICKET-041) and its verification (TICKET-042) depend on this valu
 - Empty `cycles` -> `None`.
 - Out-of-order / duplicate input handled: sort and dedupe before scanning.
 - Pure, deterministic, stdlib-only; no I/O, no process.
+
+DONE — verified implemented in relaunch.py (tests in test_relaunch.py); closed out in Cycle 35.

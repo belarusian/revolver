@@ -1,6 +1,6 @@
 # TICKET-042: verify_relaunch() + RelaunchVerification — relaunch verification
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 9 synthesis audit
 Target: `revolver/relaunch.py` (NEW module) — relaunch verification.
@@ -30,3 +30,5 @@ RelaunchVerification`:
   driver_alive seam). `ok = marker_appended and driver_alive`.
 - Errors list names the failed check(s). NO process kill.
 - Pure logic; the only I/O is through the seams.
+
+DONE — verified implemented in relaunch.py (tests in test_relaunch.py); closed out in Cycle 35.

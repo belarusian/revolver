@@ -1,6 +1,6 @@
 # TICKET-021: Whole-manifest validate() re-checking every invariant
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 5 (synthesis)
 
@@ -27,3 +27,5 @@ Acceptance:
 - A proposal with an out-of-namespace path -> ValueError (hard rule 7).
 - A plan with request_timeout < outer_wall -> ValueError.
 - A plan with one_pipeline_per_endpoint False -> ValueError.
+
+DONE — verified implemented in manifest.py (tests in test_manifest.py); closed out in Cycle 35.

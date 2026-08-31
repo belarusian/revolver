@@ -1,5 +1,7 @@
 # TICKET-030: LaunchPlanReport dataclass + check_launch_plan() command-shape validator
 
+Status: DONE
+
 ## Title
 `revolver/validation.py` has no launch-plan validator. Add `LaunchPlanReport(ok, errors)`
 and `check_launch_plan(plan, *, endpoint_pin=None) -> LaunchPlanReport` that validates a
@@ -30,3 +32,5 @@ string; `ok` is True iff no failures):
    supplied; otherwise a self-consistency check (always passes).
 5. request_timeout >= outer_wall (equality allowed; compare as ints).
 6. one_pipeline_per_endpoint is True.
+
+DONE — verified implemented in validation.py (tests in test_validation.py); closed out in Cycle 35.

@@ -1,6 +1,6 @@
 # TICKET-018: tests/test_launch_plan.py round-trip + invariants
 
-Status: OPEN
+Status: DONE
 Cycle: 4 (additive proposal)
 
 ## What's missing
@@ -13,3 +13,5 @@ no-op; to_dict/from_dict lossless; validate() raises on a broken plan.
 
 ## Evidence
 House test convention (test_proposal.py round-trip style).
+
+DONE — verified implemented in launch_plan.py (tests in test_launch_plan.py); closed out in Cycle 35.

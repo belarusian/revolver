@@ -1,6 +1,6 @@
 # TICKET-022: Deterministic render() to a human-readable text report
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 5 (synthesis)
 
@@ -25,3 +25,5 @@ Acceptance:
   randomness, no dict-iteration-order dependence).
 - Output embeds each NEW file path and the launch command.
 - Re-rendering after a to_dict/from_dict round-trip yields identical text.
+
+DONE — verified implemented in manifest.py (tests in test_manifest.py); closed out in Cycle 35.

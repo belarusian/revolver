@@ -1,5 +1,7 @@
 # TICKET-025: No syntax validation of generated NEW-file content
 
+Status: DONE
+
 ## Title
 `NewFile.content` emitted by the repair path is never checked to be valid Python.
 
@@ -19,3 +21,5 @@ Add `revolver/validation.py::check_syntax(content, *, path) -> SyntaxReport`
 (`SyntaxReport(path, ok, error)`): compile in-memory with `compile()` (no disk
 write); `.py` files must compile, non-Python files (e.g. `*.out` markers) are
 reported ok with a "not python" note. Pure, deterministic.
+
+DONE — verified implemented in validation.py (tests in test_validation.py); closed out in Cycle 35.

@@ -1,6 +1,6 @@
 # TICKET-041: plan_relaunch() + RelaunchPlan — resume-aware relaunch plan
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 9 synthesis audit
 Target: `revolver/relaunch.py` (NEW module) — resume-aware relaunch plan.
@@ -30,3 +30,5 @@ resume-aware relaunch plan.
   `manifest.launch_plan.command`'s shape (nohup + `>> cycles.out 2>&1 &`), note
   describing the resume range.
 - Pure, deterministic, stdlib-only; no I/O, no process.
+
+DONE — verified implemented in relaunch.py (tests in test_relaunch.py); closed out in Cycle 35.

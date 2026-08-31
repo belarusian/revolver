@@ -1,6 +1,6 @@
 # TICKET-043: tests/test_relaunch.py — coverage for the relaunch module
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 9 synthesis audit
 Target: `tests/test_relaunch.py` (NEW) — tests for revolver/relaunch.py.
@@ -25,3 +25,5 @@ filesystem.
 ## Suggestion
 `tests/test_relaunch.py` covering every acceptance criterion above. Injectable
 seams / patch.object; never spawn a real process or touch the real filesystem.
+
+DONE — verified implemented in relaunch.py (tests in test_relaunch.py); closed out in Cycle 35.

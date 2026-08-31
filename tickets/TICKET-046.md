@@ -1,6 +1,6 @@
 # TICKET-046: observe() — honest gap reporting (observer unions what the launch preserved)
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 10 synthesis audit
 Target: `revolver/observe.py` (NEW module) — the observer half of the loop.
@@ -44,3 +44,5 @@ markers=None, read_cycles_out=None) -> Observation`:
 - gaps = cycles in `cycles` that have NO marker at all (neither seen nor done) —
   reported honestly, never assumed done.
 - Pure logic; the only I/O is through the seams.
+
+DONE — verified implemented in observe.py (tests in test_observe.py); closed out in Cycle 35.

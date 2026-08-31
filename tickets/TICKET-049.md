@@ -1,6 +1,6 @@
 # TICKET-049: observe() — done vs started distinction feeds the later recurrence verdict
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 10 synthesis audit
 Target: `revolver/observe.py` (NEW module) — done/started semantics.
@@ -33,3 +33,5 @@ split is the foundation of the report phase.
 - The distinction is preserved in CycleMarker.status and surfaced in
   Observation.cycles_done / cycles_in_flight.
 - Pure, deterministic, stdlib-only.
+
+DONE — verified implemented in observe.py (tests in test_observe.py); closed out in Cycle 35.

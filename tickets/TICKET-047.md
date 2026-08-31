@@ -1,6 +1,6 @@
 # TICKET-047: observe() tests — parse_cycle_markers + observe over every seam
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 10 synthesis audit
 Target: `tests/test_observe.py` (NEW test module).
@@ -35,3 +35,5 @@ order" rule demand. The gate (pytest) must prove them.
   Observation; custom markers seam (inject a list[CycleMarker]); read_cycles_out
   seam (inject a fake reader, default never called).
 - Use injectable seams / patch.object; never touch the real filesystem.
+
+DONE — verified implemented in observe.py (tests in test_observe.py); closed out in Cycle 35.

@@ -1,6 +1,6 @@
 # TICKET-038: overridable seams keep deploy/relaunch pure + testable
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 8 synthesis audit
 Target: seam design (revolver/deploy.py).
@@ -21,3 +21,5 @@ Target: seam design (revolver/deploy.py).
 takes `run_command` (default: a real subprocess launch) as an overridable seam. Tests
 inject fakes so nothing touches the real filesystem or spawns a real driver. The
 default implementations do the real I/O; the logic is pure.
+
+DONE — verified implemented in deploy.py (tests in test_deploy.py); closed out in Cycle 35.

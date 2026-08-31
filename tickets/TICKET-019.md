@@ -1,6 +1,6 @@
 # TICKET-019: Purity + determinism of the launch plan
 
-Status: OPEN
+Status: DONE
 Cycle: 4 (additive proposal)
 
 ## What's missing
@@ -13,3 +13,5 @@ deterministic across calls.
 
 ## Evidence
 Build Order: cycles 8-9 execute, 6-7 validate; cycle 4 only derives.
+
+DONE — verified implemented in launch_plan.py (tests in test_launch_plan.py); closed out in Cycle 35.

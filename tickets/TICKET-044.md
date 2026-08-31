@@ -1,6 +1,6 @@
 # TICKET-044: relaunch module invariants — no process kill, append-not-truncate
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 9 synthesis audit
 Target: `revolver/relaunch.py` (NEW module) — cross-cutting invariants.
@@ -24,3 +24,5 @@ Enforce the cross-cutting invariants across the relaunch module: NO process kill
 - verify_relaunch is read-only (reads cycles.out, probes the driver); it never
   terminates a process.
 - Pure, deterministic, stdlib-only; overridable seams for all I/O.
+
+DONE — verified implemented in relaunch.py (tests in test_relaunch.py); closed out in Cycle 35.

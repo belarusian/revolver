@@ -1,6 +1,6 @@
 # TICKET-020: ProposalManifest data model + build_manifest()
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 5 (synthesis)
 
@@ -32,3 +32,5 @@ Acceptance:
   `propose(d)` and `.launch_plan` == `build_launch_plan(propose(d))`.
 - Healthy (failure_mode=="none") -> empty `new_files` + no-op plan.
 - Deterministic: `build_manifest(d).to_dict() == build_manifest(d).to_dict()`.
+
+DONE — verified implemented in manifest.py (tests in test_manifest.py); closed out in Cycle 35.
