@@ -1,5 +1,7 @@
 # TICKET-033: tests for check_launch_plan — every acceptance criterion
 
+Status: DONE
+
 ## Title
 `tests/test_validation.py` must cover `check_launch_plan` for every briefing criterion.
 
@@ -17,3 +19,5 @@ Parametrized tests: (a) no-op plan -> ok + no-op note; (b) healthy actionable pl
 request_timeout < outer_wall -> not ok; (h) one_pipeline_per_endpoint False -> not ok;
 (i) request_timeout == outer_wall -> ok (equality allowed); (j) self-consistency pin
 (no expected) -> ok. Deterministic.
+
+DONE — verified implemented in validation.py (tests in test_validation.py); closed out in Cycle 35.

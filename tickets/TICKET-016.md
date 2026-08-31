@@ -1,6 +1,6 @@
 # TICKET-016: Multi-file repair path (plan file + cycles.out marker)
 
-Status: OPEN
+Status: DONE
 Cycle: 4 (additive proposal)
 
 ## What's missing
@@ -17,3 +17,5 @@ marker file. Both carry the diff-from-predecessor + evidence docstring.
 ## Evidence
 Seed: JUNIOR.md §8 (continuation launches append `>> cycles.out`; a `>` truncates
 prior markers — the scar that lost markers 1-12).
+
+DONE — verified implemented in fixes.py (tests in test_fixes_generators.py); closed out in Cycle 35.

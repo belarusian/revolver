@@ -1,5 +1,7 @@
 # TICKET-027: No whole-manifest artifact validation
 
+Status: DONE
+
 ## Title
 `ProposalManifest` has no dry-run validation over its generated NEW files.
 
@@ -17,3 +19,5 @@ Add `revolver/validation.py::validate_manifest_artifacts(manifest, *,
 known_modules=None) -> list[ValidationResult]`: run syntax + import checks over
 every `NewFile` in `manifest.proposal.new_files`; return one `ValidationResult`
 per file (path, syntax_ok, imports_ok, errors). No I/O, no process launch.
+
+DONE — verified implemented in validation.py (tests in test_validation.py); closed out in Cycle 35.

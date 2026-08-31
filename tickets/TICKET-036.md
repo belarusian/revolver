@@ -1,6 +1,6 @@
 # TICKET-036: deploy_manifest must never overwrite an existing path (hard rule 7)
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 8 synthesis audit
 Target: additions-only deploy (revolver/deploy.py).
@@ -19,3 +19,5 @@ exists (via an overridable `path_exists` seam, default `os.path.exists`). If it 
 append an error to the report (do NOT clobber) and skip the write. A manifest whose
 target path already exists is reported not-ok with the collision error. This mirrors
 `RepairProposal.validate()`'s no-collision rule at deploy time.
+
+DONE — verified implemented in deploy.py (tests in test_deploy.py); closed out in Cycle 35.

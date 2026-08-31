@@ -1,5 +1,7 @@
 # TICKET-026: No import validation of generated NEW-file content
 
+Status: DONE
+
 ## Title
 `NewFile.content` imports are never checked against the known revolver namespace.
 
@@ -17,3 +19,5 @@ ImportReport` (`ImportReport(path, ok, missing)`): parse import statements via
 `ast`, report any top-level module that is neither stdlib nor in `known_modules`
 (default: the revolver package modules). Static name check — does NOT require the
 module to be importable at runtime. Pure, deterministic.
+
+DONE — verified implemented in validation.py (tests in test_validation.py); closed out in Cycle 35.

@@ -1,6 +1,6 @@
 # TICKET-045: parse_cycle_markers() — per-cycle marker parsing (file order)
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 10 synthesis audit
 Target: `revolver/observe.py` (NEW module) — the observer half of the loop.
@@ -45,3 +45,5 @@ list[CycleMarker]`:
   dedupe.
 - Empty text -> empty list.
 - Pure, deterministic, stdlib-only; no I/O.
+
+DONE — verified implemented in observe.py (tests in test_observe.py); closed out in Cycle 35.

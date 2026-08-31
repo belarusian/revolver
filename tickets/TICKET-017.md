@@ -1,6 +1,6 @@
 # TICKET-017: LaunchPlan invariants + validate()
 
-Status: OPEN
+Status: DONE
 Cycle: 4 (additive proposal)
 
 ## What's missing
@@ -17,3 +17,5 @@ diagnosis).
 ## Evidence
 Seed: chat_model_v2.py:17-18 (timeout > any external wall, max 10800s);
 JUNIOR.md §3/§8.
+
+DONE — verified implemented in launch_plan.py (tests in test_launch_plan.py); closed out in Cycle 35.

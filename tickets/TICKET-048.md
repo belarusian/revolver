@@ -1,6 +1,6 @@
 # TICKET-048: observe module invariants — read-only, no process launch/kill, position is the only order
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 10 synthesis audit
 Target: `revolver/observe.py` (NEW module) — cross-cutting invariants.
@@ -32,3 +32,5 @@ lose the restart history the §7 union rule depends on.
 - parse_cycle_markers returns markers in file order; never sort, never dedupe.
 - observe() is read-only: the only I/O is through the seams (read_cycles_out).
 - Pure, deterministic, stdlib-only.
+
+DONE — verified implemented in observe.py (tests in test_observe.py); closed out in Cycle 35.

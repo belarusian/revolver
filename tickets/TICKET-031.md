@@ -1,5 +1,7 @@
 # TICKET-031: validate_manifest_launch() — run check_launch_plan over manifest.launch_plan
 
+Status: DONE
+
 ## Title
 Add `validate_manifest_launch(manifest, *, endpoint_pin=None) -> LaunchPlanReport` to
 `revolver/validation.py`: run `check_launch_plan` over `manifest.launch_plan` and return
@@ -13,3 +15,5 @@ the single report.
 ## Suggestion
 Pure, dry-run, stdlib-only, no I/O, no process launch. Thin wrapper:
 `return check_launch_plan(manifest.launch_plan, endpoint_pin=endpoint_pin)`. No re-derivation.
+
+DONE — verified implemented in validation.py (tests in test_validation.py); closed out in Cycle 35.

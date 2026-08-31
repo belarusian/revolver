@@ -1,6 +1,6 @@
 # TICKET-039: tests/test_deploy.py — deploy + relaunch coverage
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 8 synthesis audit
 Target: test coverage for revolver/deploy.py.
@@ -19,3 +19,5 @@ rule 7); a not-approved manifest writes nothing and reports a "not approved" not
 healthy (no-op) manifest writes nothing. `relaunch` runs the launch command for an
 actionable plan (via the seam); a no-op plan launches nothing and reports a "no-op"
 note. Use injectable seams / `patch.object` — never spawn a real process.
+
+DONE — verified implemented in deploy.py (tests in test_deploy.py); closed out in Cycle 35.

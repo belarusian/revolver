@@ -1,6 +1,6 @@
 # TICKET-024: tests/test_manifest.py
 
-Status: OPEN
+Status: DONE
 Date: 2026-08-27
 Cycle: 5 (synthesis)
 
@@ -23,3 +23,5 @@ Add `tests/test_manifest.py` covering:
 
 Acceptance:
 - `pytest tests/test_manifest.py -q` green; full suite green.
+
+DONE — verified implemented in manifest.py (tests in test_manifest.py); closed out in Cycle 35.
