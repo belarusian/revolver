@@ -71,6 +71,7 @@ def _cycle8_diagnosis() -> Diagnosis:
     )
 
 
+@requires_triple
 class TestClientTimeoutReplay:
     def test_emits_four_new_files(self):
         files = build_client_timeout_fix(_cycle8_diagnosis())
@@ -419,6 +420,7 @@ def _v4_guard_namespace() -> dict:
     return ns
 
 
+@requires_triple
 class TestOuterFreshnessReplay:
     def test_emits_two_new_files(self):
         files = build_outer_freshness_fix(
