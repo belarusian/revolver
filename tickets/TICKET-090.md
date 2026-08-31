@@ -25,8 +25,8 @@ triple dir. The client-timeout tests in `tests/test_fixes_generators.py` were
 - Added module-level `from pathlib import Path` (annotation; ruff F821).
 - Updated the docstring to document the seam.
 - NOT changed: generated content, the four ChangeInstruction objects, derive() calls,
-  the FIX_BUILDERS registry, and `build_inner_wall_fix` (TICKET-087 stays OPEN —
-  documented design fact).
+  the FIX_BUILDERS registry, and `build_inner_wall_fix` (which was later registered in
+  `FIX_BUILDERS` and made reachable via `propose()` by TICKET-087, now DONE).
 
 ## Test
 
