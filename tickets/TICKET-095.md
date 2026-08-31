@@ -1,6 +1,6 @@
 # TICKET-095: Remove dead embedded module body `_outer_freshness_runner_content` from `revolver/fixes.py`
 
-Status: OPEN
+Status: DONE
 Cycle: 37 (synthesis audit)
 
 ## Purpose
@@ -48,3 +48,5 @@ lines) so `build_outer_freshness_fix` (:580) follows `_outer_freshness_evidence`
 `pytest tests/test_fixes_generators.py tests/test_replay.py -q` (the outer-freshness
 replay tests exercise `build_outer_freshness_fix`, which is untouched) and
 `ruff check revolver/` (F841/unused should stay clean).
+
+DONE (Cycle 37): `_outer_freshness_runner_content` (fixes.py:477-578) removed; `revolver/fixes.py` now carries ZERO embedded module bodies. Gate clean (414 passed, ruff clean, mypy clean). See TICKET-077.
