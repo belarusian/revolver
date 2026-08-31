@@ -1,6 +1,6 @@
 # TICKET-078 — Execute-not-grep replay tests: replay the generated artifacts, not their prose
 
-**Status:** TODO
+**Status:** DONE
 **Cycle:** 19
 **Build Order row:** Derive-by-reference (17–19)
 
@@ -34,3 +34,36 @@ Replace the docstring-grep replay tests (`test_runner_and_spoke_carry_one_line_i
   (GitHub lens), run fully on Sunny; stdlib only, no endpoints, no wall-clocks.
 - Gate: pytest + ruff + mypy clean; log block cites which old grep tests each new
   executing test replaces.
+
+## Resolution (Cycle 39)
+Verified against the current `tests/test_replay.py` (23 tests, all on main at
+f0cbf13) and flipped TODO -> DONE on its own evidence. No new code and no new
+tests were added this cycle — this is a verification + flip pass.
+
+Each acceptance bullet is met by the EXECUTING tests already on main:
+
+- **Compile** — `test_all_py_files_compile` (and the per-class
+  `test_all_py_files_compile` variants) `py_compile` every generated `.py` file.
+- **Import-resolution** — `test_import_resolution` execs the generated runner in a
+  namespace where the staged chat-model module satisfies its import, proving the
+  emitted import points at the staged file, not a re-typed body.
+- **Diff isolation** — `test_diff_isolation` (and the per-class variants) take a
+  `difflib` diff of every generated file vs its predecessor and assert it equals
+  exactly the instruction's stated lines (byte-identity of everything else).
+- **Broken-instruction fails at derive** — `test_broken_instruction_fails_at_derive`
+  feeds a wrong replacement text and proves the proposal fails at derive time
+  (compile/diff isolation), not at replay time.
+- **Recurrence semantics** — `test_v4_reader_reinvokes_on_stale` re-invokes the
+  v4-shape guard over a seeded stale trajectory (the good part of the old replay
+  tests, kept).
+
+The docstring-grep FICTION tests (`test_every_file_carries_docstring` et al.) are
+GONE from `tests/test_replay.py` — replaced, not extended. The one same-named test
+that survives, `test_runner_and_spoke_carry_one_line_import_delta` in
+`tests/test_fixes_generators.py` (TICKET-086), is a REAL diff-isolation test (reads
+the predecessor, asserts exactly one line deleted + one added), NOT a prose-grep.
+
+CI-safe: execution-plane-dependent tests carry the `requires_triple` skip marker
+(`pytest.mark.skipif(not _triple_available(), ...)` at `tests/test_replay.py:51`,
+with `_TRIPLE_DIR = Path.home()/"AI"/"revolver"/"triple"` at :43) — they skip when
+the triple dir is absent (GitHub lens) and run fully on Sunny.
