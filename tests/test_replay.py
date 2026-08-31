@@ -577,6 +577,73 @@ class TestOuterFreshnessReplay:
 
 
 # ---------------------------------------------------------------------------
+# TICKET-100: build_outer_freshness_fix triple_dir seam (unit-test blocker)
+# ---------------------------------------------------------------------------
+
+
+class TestOuterFreshnessTripleDirSeam:
+    """TICKET-100: build_outer_freshness_fix accepts an overridable triple_dir seam.
+
+    Mirrors TICKET-090's build_client_timeout_fix seam. These tests use a temp
+    dir with the two predecessor files (containing the exact target strings the
+    builder replaces) — no real triple directory required. Deterministic, pure,
+    no execution-plane dependency, and NOT @requires_triple-guarded.
+    """
+
+    def test_triple_dir_seam_produces_two_new_files(self, tmp_path: Path):
+        """Passing triple_dir=tmp_path produces 2 NewFiles without a real triple."""
+        # Write the two predecessor files with the exact target strings the
+        # builder replaces (one target line each; derive() requires exactly 1).
+        runner = tmp_path / "outer_freshness_run_v3.py"
+        runner.write_text(
+            "import sys\n"
+            "\n"
+            "def read_newest_trajectory(trajectories):\n"
+            "    return {}\n"
+            "\n"
+            "def main():\n"
+            "    trajectories = \"/tmp/trajectories\"\n"
+            "    pass_start_max_seq = 26\n"
+            "    newest = read_newest_trajectory(str(trajectories))  # step-2: unguarded (before-state)\n"
+            "    print(newest)\n"
+            "\n"
+            "if __name__ == \"__main__\":\n"
+            "    main()\n",
+            encoding="utf-8",
+        )
+        driver = tmp_path / "outer_freshness_driver_v3.sh"
+        driver.write_text(
+            "#!/bin/bash\n"
+            "set -uo pipefail\n"
+            "export FIVE_REQUEST_TIMEOUT=21600\n"
+            "RUN=/home/sasha/AI/revolver/triple/run-v3.py\n"
+            "echo \"$RUN\"\n",
+            encoding="utf-8",
+        )
+
+        d = _cycle16_diagnosis()
+        files = build_outer_freshness_fix(d, predecessor_runner="PRE", triple_dir=tmp_path)
+        assert len(files) == 2
+        # All paths under the proposal namespace.
+        for f in files:
+            assert f.path.startswith(PROPOSAL_NAMESPACE)
+        # The two expected artifacts, in order.
+        names = [f.path.rsplit("/", 1)[-1] for f in files]
+        assert names == ["outer_freshness_run_v4.py", "outer_freshness_driver.sh"]
+        # The runner carries the guard edit; the driver carries the RUN repoint.
+        runner_out = files[0].content
+        assert "pass_freshness_guard" in runner_out
+        assert "DEAD-UNWITNESSED" in runner_out
+        driver_out = files[1].content
+        assert "RUN=" + PROPOSAL_NAMESPACE + "outer_freshness_run_v4.py" in driver_out
+        # The seam is HONORED: each derived header names the temp-dir
+        # predecessor (proves the override took effect even when the real
+        # execution-plane triple dir is present locally).
+        assert f"derived from {tmp_path / 'outer_freshness_run_v3.py'}" in runner_out
+        assert f"derived from {tmp_path / 'outer_freshness_driver_v3.sh'}" in driver_out
+
+
+# ---------------------------------------------------------------------------
 # Negative test: broken instruction fails at derive time
 # ---------------------------------------------------------------------------
 
