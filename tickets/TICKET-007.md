@@ -1,5 +1,6 @@
 # TICKET-007: revolver.diagnosis — try sentry first, fall back to raw-artifacts
 
+Status: DONE
 **Title:** Extend `diagnose()` to try sentry first (when importable), then fall back to
 `parse_raw_artifacts`, recording the provenance in `source`.
 
@@ -19,3 +20,5 @@ degradation story is incomplete.
   `parse_raw_artifacts(...)` and ensure `source="raw-artifacts"` + an evidence note that
   sentry was unavailable.
 - Keep the `sentry_available` override and the `read_file` seam for tests.
+
+DONE — verified implemented in diagnosis.py (tests in test_sentry_client.py); closed out in Cycle 36.

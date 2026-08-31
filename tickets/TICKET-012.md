@@ -1,5 +1,6 @@
 # TICKET-012: revolver.fixes — per-failure-mode fix builders
 
+Status: DONE
 **Title:** Add `revolver/fixes.py` with pure, deterministic, stdlib-only fix builders for
 each failure mode (driver-death, wall-kill, stall-kill, none) that emit NEW-file content.
 
@@ -22,3 +23,5 @@ repair path would be empty for every actionable failure mode.
   diff-from-predecessor and the motivating evidence (the diagnosis fields).
 - `FIX_BUILDERS: dict[str, Callable[[Diagnosis], list[NewFile]]]` registry keyed by
   failure_mode, defaulting unknown modes to the none-builder.
+
+DONE — verified implemented in fixes.py (tests in test_fixes_generators.py); closed out in Cycle 36.

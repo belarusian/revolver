@@ -1,5 +1,6 @@
 # TICKET-060 — README: what revolver is (the closed loop)
 
+Status: DONE
 **Cycle:** 13 (Docs + release)
 **Target:** `README.md` (new file)
 **Capability:** A top-level README that states what revolver is — the hands of the
@@ -13,3 +14,5 @@ on the new path, and the observer reports whether the diagnosed failure mode rec
   criteria the build was tested against.
 - No invented command lines: the quickstart uses the real library entry points
   (diagnose / build_manifest / deploy_manifest / relaunch / render_final_report).
+
+DONE — verified in README.md (The closed loop section); closed out in Cycle 36.

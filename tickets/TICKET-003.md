@@ -1,5 +1,6 @@
 # TICKET-003: revolver.diagnosis — round-trip + validation + exit-code convention
 
+Status: DONE
 **Title:** Give `Diagnosis` a lossless round-trip (`to_dict`/`from_dict`), validation, and the house exit-code convention.
 
 **Evidence:** House convention (sentry/cli.py): 0 = healthy, 1 = action needed,
@@ -11,3 +12,5 @@ the record cannot be serialized for the proposal stage (cycles 3-5) or asserted 
 
 **Suggestion:** Add `to_dict()`, `from_dict()`, `action_needed` and `exit_code`
 properties, and a `validate()` that raises on unknown `source`/`verdict`/`stall_action`.
+
+DONE — verified implemented in diagnosis.py (tests in test_diagnosis.py); closed out in Cycle 36.

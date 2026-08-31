@@ -1,5 +1,6 @@
 # TICKET-053 — tests for report (recurrence verdict)
 
+Status: DONE
 **Cycle:** 11 (Observe + report)
 **Module:** `tests/test_observe.py`
 
@@ -16,3 +17,5 @@
 - to_dict/from_dict round-trip + to_dict keys.
 - Use injectable seams / `patch.object` — never constructor-level patches; never touch
   the real filesystem.
+
+DONE — verified implemented in observe.py (tests in test_observe.py); closed out in Cycle 36.

@@ -1,5 +1,6 @@
 # TICKET-014: tests/test_proposal — round-trip + validation
 
+Status: DONE
 **Title:** Add `tests/test_proposal.py`: `propose()` round-trip for every failure_mode,
 every new_file carries non-empty diff-from-predecessor + evidence, no existing path is
 mutated, and `to_dict`/`from_dict` is lossless.
@@ -22,3 +23,5 @@ the round-trip would go undetected.
   `diff_from_predecessor` and `evidence`, and its content embeds both docstring lines.
 - Assert no new_file path collides with an existing repo path (hard rule 7).
 - Assert `RepairProposal.from_dict(p.to_dict()) == p` (lossless round-trip).
+
+DONE — verified implemented in proposal.py (tests in test_proposal.py); closed out in Cycle 36.

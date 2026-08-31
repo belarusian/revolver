@@ -1,5 +1,6 @@
 # TICKET-052 — tests for parse_trajectory_outcomes
 
+Status: DONE
 **Cycle:** 11 (Observe + report)
 **Module:** `tests/test_observe.py`
 
@@ -14,3 +15,5 @@ Extend `tests/test_observe.py` with a `TestParseTrajectoryOutcomes` class.
   seam -> empty), file order preserved.
 - Use injectable seams / `patch.object` — never constructor-level patches; never touch
   the real filesystem.
+
+DONE — verified implemented in observe.py (tests in test_observe.py); closed out in Cycle 36.

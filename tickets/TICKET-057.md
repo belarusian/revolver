@@ -1,5 +1,6 @@
 # TICKET-057 — render_final_report + FinalReport (compose the three observations)
 
+Status: DONE
 ## Capability
 `FinalReport(failure_mode, recurred, observation, outcomes, git, note)` dataclass + `render_final_report(diagnosis, *, markers=None, read_cycles_out=None, read_trajectory=None, merge_commits=None, read_git_log=None) -> FinalReport`.
 
@@ -12,3 +13,5 @@
 
 ## Acceptance
 - clean run -> recurred False; recurrence -> recurred True; git missing feeds the report; empty inputs; custom markers/read_cycles_out/read_trajectory/merge_commits/read_git_log seams.
+
+DONE — verified implemented in observe.py (tests in test_observe.py); closed out in Cycle 36.

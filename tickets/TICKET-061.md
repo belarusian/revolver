@@ -1,5 +1,6 @@
 # TICKET-061 — README: quickstart (library-based, verified against modules)
 
+Status: DONE
 **Cycle:** 13 (Docs + release)
 **Target:** `README.md` (quickstart section)
 **Capability:** A quickstart showing the diagnose -> propose -> approve -> deploy ->
@@ -13,3 +14,5 @@ text*, not real commands. The quickstart must be library-based.
   `diagnose(project_dir)`, `build_manifest(diagnosis)`, `deploy_manifest(manifest,
   base_dir=..., approved=...)`, `relaunch(manifest)`, `render_final_report(diagnosis)`.
 - No invented flags or subcommands.
+
+DONE — verified in README.md (Quickstart section); closed out in Cycle 36.

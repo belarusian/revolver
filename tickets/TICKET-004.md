@@ -1,5 +1,6 @@
 # TICKET-004: revolver.sentry_pin — resolve sentry as a pinned git dependency
 
+Status: DONE
 **Title:** Resolve sentry as a pinned git dependency (loop-doctor pattern: full-sha pin, never a live tree).
 
 **Evidence:** loop-doctor pins optional deps as
@@ -16,3 +17,5 @@ revision it consumes; a live tree would make diagnoses non-reproducible.
 sha), `parse_requirement(req) -> SentryPin`, `render_requirement(pin) -> str`,
 `validate_pin(pin)` (full 40-hex sha, https git+ url, no branch/tag), and a
 `DEFAULT_SENTRY_PIN` constant. Pure, stdlib-only.
+
+DONE — verified implemented in sentry_pin.py (tests in test_sentry_pin.py); closed out in Cycle 36.

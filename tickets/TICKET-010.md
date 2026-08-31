@@ -1,5 +1,6 @@
 # TICKET-010: revolver.proposal — NewFile + RepairProposal dataclasses
 
+Status: DONE
 **Title:** Add `revolver/proposal.py` with a `NewFile` dataclass (path, content,
 diff_from_predecessor, evidence) and a `RepairProposal` dataclass (pipeline_id,
 diagnosis, new_files, rationale, version) with lossless `to_dict`/`from_dict`.
@@ -26,3 +27,5 @@ proposal phase (Build Order cycles 3-5) cannot begin.
   round-trip; new_files as a list of dicts).
 - `validate()` enforces hard rule 7: no `new_file.path` may collide with an existing
   repo path (additions only).
+
+DONE — verified implemented in proposal.py (tests in test_proposal.py); closed out in Cycle 36.
