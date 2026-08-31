@@ -1,6 +1,6 @@
 # TICKET-077 — Fix-class builders as instruction emitters over the seed triple (all three classes)
 
-**Status:** TODO
+**Status:** DONE
 **Cycle:** 18
 **Build Order row:** Derive-by-reference (17–19)
 
@@ -40,3 +40,5 @@ Rewrite the three fix-class generators as thin instruction emitters that call
 - Each builder returns a proposal whose every file passes `derive` verification
   (compile + diff == stated lines).
 - Additive-compatible: existing `propose()` / validate() flows keep passing.
+
+**DONE (Cycle 37, HEAD ae97445):** The three fix-class builders (`build_client_timeout_fix`, `build_inner_wall_fix`, `build_outer_freshness_fix`) are thin instruction emitters over `revolver.derive` (verified: each composes `ChangeInstruction` objects and calls `derive()`; no embedded module body). The one remaining dead embedded body `_outer_freshness_runner_content` (fixes.py:477-578) was removed in Cycle 37, leaving ZERO embedded module bodies. Acceptance re-measured: `grep -n 'def build_' revolver/fixes.py | wc -l` == 7 (4 none/driver/wall/stall + 3 derive emitters); the value-embedding pattern (`def main` / `import litellm` / `_EMBEDDED` / `_BODY` / `_TEMPLATE`) is gone; full gate clean (414 passed, ruff clean, mypy clean). Note: the acceptance line '== 3' was written at Cycle 18 when only the 3 derive builders existed; the invariant it guards (no embedded module body in any builder) holds at the current count of 7.
