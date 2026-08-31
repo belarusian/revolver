@@ -1,5 +1,6 @@
 # TICKET-006: revolver.sentry_client — invoke `sentry check` via the pinned dependency
 
+Status: DONE
 **Title:** Add `revolver/sentry_client.py` that runs `sentry check <project-dir>` through an
 overridable runner seam (no live tree, no shell-out in tests) and parses its stdout into a
 `Diagnosis` with `source="sentry-report"`.
@@ -27,3 +28,5 @@ overridable runner seam (no live tree, no shell-out in tests) and parses its std
 - `diagnose_via_sentry(project_dir) -> Diagnosis`: call the seam, `parse_sentry_report(stdout)`,
   and map the exit code onto the record (exit_code 2 -> usage error; 0/1 -> action_needed).
 - Degrade to raw-artifacts when `sentry` is not importable (ImportError) — record provenance.
+
+DONE — verified implemented in sentry_client.py (tests in test_sentry_client.py); closed out in Cycle 36.

@@ -1,5 +1,6 @@
 # TICKET-054 — cross-cutting invariants (read-only, pure, seams)
 
+Status: DONE
 **Cycle:** 11 (Observe + report)
 **Module:** `revolver/observe.py`
 
@@ -18,3 +19,5 @@
   recurring; it does NOT re-run the diagnosis.
 - Gate: `pytest tests/ -x -q` + `ruff check revolver/` + `mypy revolver/
   --ignore-missing-imports` all green.
+
+DONE — verified implemented in observe.py (tests in test_observe.py); closed out in Cycle 36.

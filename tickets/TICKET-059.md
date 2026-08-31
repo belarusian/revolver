@@ -1,5 +1,6 @@
 # TICKET-059 — tests/test_observe.py extension (merge-commit + final-report coverage)
 
+Status: DONE
 ## Capability
 Extend `tests/test_observe.py` with the Cycle 12 coverage.
 
@@ -11,3 +12,5 @@ Extend `tests/test_observe.py` with the Cycle 12 coverage.
 
 ## Acceptance
 - full suite green; ruff clean; mypy clean.
+
+DONE — verified implemented in observe.py (tests in test_observe.py); closed out in Cycle 36.

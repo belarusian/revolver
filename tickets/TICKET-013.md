@@ -1,5 +1,6 @@
 # TICKET-013: hard rule 7 — never mutate an existing path
 
+Status: DONE
 **Title:** Enforce hard rule 7 across the proposal: a `RepairProposal` NEVER lists a
 mutation of an existing path — only additions.
 
@@ -20,3 +21,5 @@ exists, violating the additive-only contract and breaking the "never mutate" gua
   proposal-owned namespace such as `revolver/fixes/`).
 - `propose()` calls `validate()` before returning so an invalid proposal never escapes.
 - Tests assert no existing path is mutated for every failure mode.
+
+DONE — verified implemented in proposal.py (tests in test_proposal.py); closed out in Cycle 36.

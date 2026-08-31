@@ -1,5 +1,6 @@
 # TICKET-011: revolver.proposal — propose(diagnosis) dispatcher
 
+Status: DONE
 **Title:** Add `propose(diagnosis) -> RepairProposal` that maps a `Diagnosis.failure_mode`
 to the matching fix builder and assembles a minimal NEW-file-only repair path.
 
@@ -20,3 +21,5 @@ proposal; the fix builders (TICKET-012) have no dispatcher.
   sentry pattern) so tests can inject fakes.
 - Unknown/healthy failure_mode -> empty `new_files`, rationale states "no action needed".
 - Deterministic: same diagnosis -> same proposal (no timestamps, no randomness).
+
+DONE — verified implemented in proposal.py (tests in test_proposal.py); closed out in Cycle 36.

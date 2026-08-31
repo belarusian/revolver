@@ -1,5 +1,6 @@
 # TICKET-009: tests/test_sentry_client.py — runner-seam tests
 
+Status: DONE
 **Title:** Add `tests/test_sentry_client.py` covering the runner seam: check stdout ->
 `Diagnosis` round-trip; not-importable -> raw-artifacts fallback; exit-code passthrough.
 
@@ -21,3 +22,5 @@ unverified.
 - Test: `sentry` not importable (seam raises ImportError) -> `diagnose()` falls back to
   `source="raw-artifacts"` and says so.
 - Use `patch.object(instance, "run_check")` (Rule 4), not constructor-level patches.
+
+DONE — verified implemented in sentry_client.py (tests in test_sentry_client.py); closed out in Cycle 36.

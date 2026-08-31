@@ -1,5 +1,6 @@
 # TICKET-064 — v0.1.0 release (version bump + tag + gh release)
 
+Status: DONE
 **Cycle:** 13 (Docs + release)
 **Target:** `pyproject.toml` + `revolver/__init__.py` + git tag + GitHub release
 **Capability:** Bump the version to 0.1.0 in both pyproject.toml and
@@ -12,3 +13,5 @@ with a short notes body (the 12-cycle build summary from the gate log).
 - `gh release create v0.1.0 --notes "..."` succeeds.
 - No new runtime code: only README.md, pyproject.toml (version), revolver/__init__.py
   (version), and GitHub metadata change.
+
+DONE — verified in v0.1.0 tag + GitHub release; closed out in Cycle 36.

@@ -1,5 +1,6 @@
 # TICKET-051 — RecurrenceReport + report (recurrence verdict)
 
+Status: DONE
 **Cycle:** 11 (Observe + report)
 **Module:** `revolver/observe.py`
 
@@ -35,3 +36,5 @@ verdict*: did the diagnosed failure mode recur in the observed run?
   outcome / gap / in-flight) -> recurred True; gaps feed the verdict; empty inputs;
   custom markers / read_cycles_out / read_trajectory seams; failure_mode reported
   verbatim; to_dict/from_dict round-trip.
+
+DONE — verified implemented in observe.py (tests in test_observe.py); closed out in Cycle 36.

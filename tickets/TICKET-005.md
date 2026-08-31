@@ -1,5 +1,6 @@
 # TICKET-005: tests — round-trip + validation for Diagnosis and sentry pin
 
+Status: DONE
 **Title:** Add `tests/test_diagnosis.py` (and pin coverage) with round-trip + validation tests.
 
 **Evidence:** The briefing lists `tests/test_diagnosis.py` as a target: "Round-trip +
@@ -14,3 +15,5 @@ new code.
 `validate()`, and `exit_code`; plus `tests/test_sentry_pin.py` covering
 `parse_requirement`/`render_requirement` round-trip and `validate_pin` (rejects
 branch/tag/short-sha).
+
+DONE — verified implemented in diagnosis.py (tests in test_diagnosis.py); closed out in Cycle 36.

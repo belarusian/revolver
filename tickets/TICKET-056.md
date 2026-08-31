@@ -1,5 +1,6 @@
 # TICKET-056 — observe_git + GitObservation (honest merge-commit reporting)
 
+Status: DONE
 ## Capability
 `GitObservation(cycles_merged, cycles_missing, note)` dataclass + `observe_git(cycles, *, merge_commits=None, read_git_log=None) -> GitObservation`.
 
@@ -11,3 +12,5 @@
 
 ## Acceptance
 - all merged, some missing, empty cycles, custom merge_commits/read_git_log seams, injected reader means default never called.
+
+DONE — verified implemented in observe.py (tests in test_observe.py); closed out in Cycle 36.

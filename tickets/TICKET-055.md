@@ -1,5 +1,6 @@
 # TICKET-055 — parse_merge_commits + MergeCommit (git merge-commit half of §8 "Done")
 
+Status: DONE
 ## Capability
 `MergeCommit(cycle, sha, raw)` dataclass + `parse_merge_commits(text, *, merge_pattern=None) -> list[MergeCommit]`.
 
@@ -11,3 +12,5 @@
 
 ## Acceptance
 - single commit, multiple commits, file order preserved, no reorder/dedupe, empty text, custom merge_pattern seam, no-match -> empty.
+
+DONE — verified implemented in observe.py (tests in test_observe.py); closed out in Cycle 36.

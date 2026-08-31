@@ -1,5 +1,6 @@
 # TICKET-050 — TrajectoryOutcome + parse_trajectory_outcomes (file order, never reorder/dedupe)
 
+Status: DONE
 **Cycle:** 11 (Observe + report)
 **Module:** `revolver/observe.py`
 
@@ -30,3 +31,5 @@ reads the *outcome* (not the messages — the messages are the spoke's private t
 - `parse_trajectory_outcomes` over: single object, JSON array, empty, malformed -> empty,
   non-object/non-array -> empty, object without `outcome` key, custom `read_trajectory`
   seam, file order preserved, no reorder/dedupe.
+
+DONE — verified implemented in observe.py (tests in test_observe.py); closed out in Cycle 36.
