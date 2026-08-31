@@ -107,6 +107,11 @@ class Diagnosis:
     # The observed heaviest inner duration (seconds) for the inner-wall mode;
     # used by build_inner_wall_fix to derive the corrected --inner-seconds.
     heaviest_inner_duration: int | None = None
+    # The PATH to the predecessor driver file for the inner-wall mode; lets
+    # build_inner_wall_fix resolve the predecessor by reference when the caller
+    # does not pass predecessor_driver= explicitly (TICKET-087). None -> the
+    # builder must be given predecessor_driver= or it raises ValueError.
+    inner_wall_driver_path: str | None = None
     # The outer wall-clock budget (seconds) the driver uses; the client-timeout
     # driver must export FIVE_REQUEST_TIMEOUT >= this value. None -> the
     # generator uses its deterministic default.
@@ -175,6 +180,7 @@ class Diagnosis:
             "client_timeout_cycle": self.client_timeout_cycle,
             "inner_wall_kill_cycle": self.inner_wall_kill_cycle,
             "heaviest_inner_duration": self.heaviest_inner_duration,
+            "inner_wall_driver_path": self.inner_wall_driver_path,
             "outer_wall": self.outer_wall,
             "inner_seconds": self.inner_seconds,
             "no_new_trajectory_witnessed": self.no_new_trajectory_witnessed,
