@@ -18,6 +18,7 @@ sentry_client.py).
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
 from revolver.diagnosis import Diagnosis
 from revolver.proposal import PROPOSAL_NAMESPACE, NewFile
@@ -255,13 +256,23 @@ def _client_timeout_evidence(diagnosis: Diagnosis) -> str:
     )
 
 
-def build_client_timeout_fix(diagnosis: Diagnosis) -> list[NewFile]:
+def build_client_timeout_fix(
+    diagnosis: Diagnosis,
+    *,
+    triple_dir: str | Path | None = None,
+) -> list[NewFile]:
     """NEW-file-only repair path for the client-timeout (cancel-loop) failure mode.
 
     Thin instruction emitter over ``revolver.derive``: composes four
     ``ChangeInstruction`` objects (one per file) and calls ``derive()`` for each.
     Predecessors are resolved from the triple meta dir by PATH — no embedded
     module bodies.
+    Args:
+        diagnosis: The failure diagnosis.
+        triple_dir: Overridable seam for the triple meta directory. When
+            ``None`` (default) the canonical path
+            ``~/AI/revolver/triple`` is used. Supply a custom path to
+            point at a test fixture or alternate triple.
 
     Pure, deterministic, stdlib-only. No disk writes, no clock, no randomness.
     """
@@ -274,7 +285,7 @@ def build_client_timeout_fix(diagnosis: Diagnosis) -> list[NewFile]:
     request_timeout = max(_DEFAULT_REQUEST_TIMEOUT, outer_wall)
 
     # Resolve predecessor paths from the triple meta dir.
-    triple_dir = Path.home() / "AI" / "revolver" / "triple"
+    triple_dir = Path(triple_dir) if triple_dir is not None else Path.home() / "AI" / "revolver" / "triple"
     chat_model_pred = triple_dir / "chat_model.py"
     runner_pred = triple_dir / "run-v3.py"
     spoke_pred = triple_dir / "cycle-implementation-v4.py"

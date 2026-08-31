@@ -397,5 +397,60 @@ class TestInnerWallContract:
         assert len(files) == 1
 
 
+class TestClientTimeoutTripleDirSeam:
+    """TICKET-090: build_client_timeout_fix accepts an overridable triple_dir seam.
+
+    These tests use a temp dir with minimal predecessor files — no real triple
+    directory required. Deterministic, pure, no execution-plane dependency.
+    """
+
+    def test_triple_dir_seam_produces_four_new_files(self, tmp_path: Path):
+        """Passing triple_dir=tmp_path produces 4 NewFiles without a real triple."""
+        # Write the four predecessor files with the exact target strings.
+        chat_model = tmp_path / "chat_model.py"
+        chat_model.write_text(
+            "import os\n"
+            "\n"
+            "def get_timeout():\n"
+            "    request_timeout = 600  # litellm built-in default — the cycle-8 cancel-loop\n"
+            "    return request_timeout\n",
+            encoding="utf-8",
+        )
+        runner = tmp_path / "run-v3.py"
+        runner.write_text(
+            "from four.chat_model_v2 import context_aware_invoke\n"
+            "\n"
+            "def run():\n"
+            "    pass\n",
+            encoding="utf-8",
+        )
+        spoke = tmp_path / "cycle-implementation-v4.py"
+        spoke.write_text(
+            "from four.chat_model_v2 import context_aware_invoke\n"
+            "\n"
+            "def cycle():\n"
+            "    pass\n",
+            encoding="utf-8",
+        )
+        driver = tmp_path / "run-cycles-v3.sh"
+        driver.write_text(
+            "#!/bin/bash\n"
+            "export FIVE_REQUEST_TIMEOUT=21600\n",
+            encoding="utf-8",
+        )
+
+        d = Diagnosis(
+            failure_mode="client-timeout",
+            client_timeout_cycle=8,
+            source="sentry-report",
+            evidence="cancel-loop",
+        )
+        files = build_client_timeout_fix(d, triple_dir=tmp_path)
+        assert len(files) == 4
+        # All paths under the proposal namespace.
+        for f in files:
+            assert f.path.startswith(PROPOSAL_NAMESPACE)
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
